@@ -20,10 +20,14 @@ def configure_test_environment():
     # 设置自定义测试环境标识（不要用PYTEST_CURRENT_TEST，那是pytest内部使用的）
     os.environ["SIMPLE_TOOLS_TEST_MODE"] = "true"
 
-    # 配置logfire为测试模式（只记录不发送）
+    # 配置logfire为测试模式
+    # 从环境变量读取是否发送数据，默认不发送
+    send_to_logfire = os.getenv("LOGFIRE_SEND_TO_LOGFIRE", "false").lower() == "true"
+    service_name = os.getenv("LOGFIRE_SERVICE_NAME", "simple-tools-test")
+
     logfire.configure(
-        service_name="simple-tools-test",
-        send_to_logfire=False,  # 测试时不发送数据
+        service_name=service_name,
+        send_to_logfire=send_to_logfire,
         console=False  # 测试时不输出到控制台
     )
 
