@@ -3,7 +3,7 @@
 import click
 import logfire
 
-from simple_tools._typing import command, option, pass_context  # 新增
+from simple_tools._typing import group, option, pass_context  # ← 这里用 group
 
 from .config import get_config
 
@@ -15,7 +15,7 @@ from .core.file_tool import list_cmd
 from .core.text_replace import replace_cmd
 
 
-@command()
+@group()
 @option("-v", "--verbose", is_flag=True, help="显示详细日志信息")
 @pass_context
 def cli(ctx: click.Context, verbose: bool) -> None:
