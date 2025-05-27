@@ -10,6 +10,8 @@ import click
 import logfire
 from pydantic import BaseModel, Field
 
+from simple_tools._typing import argument, command, option, pass_context  # 新增
+
 
 class OrganizeConfig(BaseModel):
     """文件整理配置."""
@@ -264,18 +266,18 @@ class FileOrganizerTool:
             click.echo(f"\n⚠️  将跳过 {skipped_count} 个文件（目标位置已存在同名文件）")
 
 
-@click.command()  # type: ignore[misc]
-@click.argument("path", type=click.Path(exists=True), default=".")  # type: ignore[misc]
-@click.option(
+@command()
+@argument("path", type=click.Path(exists=True), default=".")
+@option(
     "-m",
     "--mode",
     type=click.Choice(["type", "date", "mixed"]),
     default="type",
     help="整理模式",
-)  # type: ignore[misc]
-@click.option("-r", "--recursive", is_flag=True, help="递归处理子目录")  # type: ignore[misc]
-@click.option("-y", "--yes", is_flag=True, help="跳过确认提示")  # type: ignore[misc]
-@click.pass_context  # type: ignore[misc]
+)
+@option("-r", "--recursive", is_flag=True, help="递归处理子目录")
+@option("-y", "--yes", is_flag=True, help="跳过确认提示")
+@pass_context
 def organize_cmd(
     ctx: click.Context, path: str, mode: str, recursive: bool, yes: bool
 ) -> None:

@@ -7,6 +7,8 @@ import click
 import logfire
 from pydantic import BaseModel, Field
 
+from simple_tools._typing import argument, command, option, pass_context  # 新增
+
 
 class ReplaceConfig(BaseModel):
     """文本替换配置."""
@@ -212,14 +214,14 @@ class TextReplaceTool:
             )
 
 
-@click.command()  # type: ignore[misc]
-@click.argument("pattern")  # type: ignore[misc]
-@click.option("-f", "--file", type=click.Path(exists=True), help="指定单个文件")  # type: ignore[misc]
-@click.option("-p", "--path", default=".", help="指定扫描目录")  # type: ignore[misc]
-@click.option("-e", "--extension", multiple=True, help="文件扩展名过滤（可多次使用）")  # type: ignore[misc]
-@click.option("--execute", is_flag=True, help="执行实际替换（默认为预览模式）")  # type: ignore[misc]
-@click.option("-y", "--yes", is_flag=True, help="跳过确认提示")  # type: ignore[misc]
-@click.pass_context  # type: ignore[misc]
+@command()
+@argument("pattern")
+@option("-f", "--file", type=click.Path(exists=True), help="指定单个文件")
+@option("-p", "--path", default=".", help="指定扫描目录")
+@option("-e", "--extension", multiple=True, help="文件扩展名过滤（可多次使用）")
+@option("--execute", is_flag=True, help="执行实际替换（默认为预览模式）")
+@option("-y", "--yes", is_flag=True, help="跳过确认提示")
+@pass_context
 def replace_cmd(
     ctx: click.Context,
     pattern: str,

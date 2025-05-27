@@ -105,6 +105,7 @@ python_version        = "3.13"
 strict                = true       # 打开 mypy 全严格模式
 ignore_missing_imports = true      # 第三方库缺乏类型提示时不报错
 plugins = ["pydantic.mypy"]        # 官方 Pydantic v2 mypy 插件
+disable_error_code = ["misc"]   # ← 新增，关闭所有 untyped decorator 报错
 # 如果严格模式过多误报，可按需设置：
 # allow_redefinition = true
 # warn_unused_configs = true

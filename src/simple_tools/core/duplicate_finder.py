@@ -10,6 +10,8 @@ import click
 import logfire
 from pydantic import BaseModel, Field
 
+from simple_tools._typing import argument, command, option, pass_context  # 新增
+
 
 class DuplicateConfig(BaseModel):
     """重复文件检测配置."""
@@ -288,23 +290,21 @@ def display_duplicate_results(
         click.echo("\n⚠️  警告：删除文件前请确认重要性，建议先备份！")
 
 
-@click.command()  # type: ignore[misc]
-@click.argument("path", type=click.Path(exists=True), default=".")  # type: ignore[misc]
-@click.option(
+@command()
+@argument("path", type=click.Path(exists=True), default=".")
+@option(
     "-r", "--recursive", is_flag=True, default=True, help="递归扫描子目录（默认启用）"
-)  # type: ignore[misc]
-@click.option("-n", "--no-recursive", is_flag=True, help="仅扫描顶层目录，不递归")  # type: ignore[misc]
-@click.option(
-    "-s", "--min-size", type=int, default=1, help="最小文件大小（字节），默认1"
-)  # type: ignore[misc]
-@click.option(
+)
+@option("-n", "--no-recursive", is_flag=True, help="仅扫描顶层目录，不递归")
+@option("-s", "--min-size", type=int, default=1, help="最小文件大小（字节），默认1")
+@option(
     "-e",
     "--extension",
     multiple=True,
     help="指定文件扩展名（可多次使用），如：-e .jpg -e .png",
-)  # type: ignore[misc]
-@click.option("--show-commands", is_flag=True, help="显示删除重复文件的建议命令")  # type: ignore[misc]
-@click.pass_context  # type: ignore[misc]
+)
+@option("--show-commands", is_flag=True, help="显示删除重复文件的建议命令")
+@pass_context
 def duplicates_cmd(
     ctx: click.Context,
     path: str,

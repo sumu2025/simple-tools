@@ -8,6 +8,8 @@ import click
 import logfire
 from pydantic import BaseModel, Field
 
+from simple_tools._typing import argument, command, option, pass_context  # 新增
+
 
 class RenameConfig(BaseModel):
     """批量重命名配置."""
@@ -296,16 +298,14 @@ class BatchRenameTool:
             return self.execute_rename(items)
 
 
-@click.command()  # type: ignore[misc]
-@click.argument("pattern", required=True)  # type: ignore[misc]
-@click.option(
-    "-p", "--path", type=click.Path(exists=True), default=".", help="目标目录路径"
-)  # type: ignore[misc]
-@click.option("-f", "--filter", default="*", help="文件过滤模式，如 '*.jpg'")  # type: ignore[misc]
-@click.option("-n", "--number", is_flag=True, help="序号模式：为文件添加数字序号")  # type: ignore[misc]
-@click.option("--execute", is_flag=True, help="直接执行，跳过预览")  # type: ignore[misc]
-@click.option("-y", "--yes", is_flag=True, help="跳过确认提示")  # type: ignore[misc]
-@click.pass_context  # type: ignore[misc]
+@command()
+@argument("pattern", required=True)
+@option("-p", "--path", type=click.Path(exists=True), default=".", help="目标目录路径")
+@option("-f", "--filter", default="*", help="文件过滤模式，如 '*.jpg'")
+@option("-n", "--number", is_flag=True, help="序号模式：为文件添加数字序号")
+@option("--execute", is_flag=True, help="直接执行，跳过预览")
+@option("-y", "--yes", is_flag=True, help="跳过确认提示")
+@pass_context
 def rename_cmd(
     ctx: click.Context,
     pattern: str,

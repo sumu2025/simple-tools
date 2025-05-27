@@ -7,6 +7,8 @@ from typing import Any
 import click
 import logfire
 
+from simple_tools._typing import argument, command, option, pass_context  # 新增
+
 
 def format_size(size_bytes: int) -> str:
     """将字节数转换为人类可读的文件大小格式.
@@ -114,11 +116,11 @@ def list_files(
         return items_info
 
 
-@click.command()  # type: ignore[misc]
-@click.argument("path", type=click.Path(exists=True), default=".")  # type: ignore[misc]
-@click.option("-a", "--all", is_flag=True, help="显示隐藏文件（以.开头的文件）")  # type: ignore[misc]
-@click.option("-l", "--long", is_flag=True, help="显示详细信息（文件大小、修改时间）")  # type: ignore[misc]
-@click.pass_context  # type: ignore[misc]
+@command()
+@argument("path", type=click.Path(exists=True), default=".")
+@option("-a", "--all", is_flag=True, help="显示隐藏文件（以.开头的文件）")
+@option("-l", "--long", is_flag=True, help="显示详细信息（文件大小、修改时间）")
+@pass_context
 def list_cmd(ctx: click.Context, path: str, all: bool, long: bool) -> None:
     """列出指定目录下的文件和文件夹.
 

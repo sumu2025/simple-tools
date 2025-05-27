@@ -3,7 +3,8 @@
 import click
 import logfire
 
-from . import __version__
+from simple_tools._typing import command, option, pass_context  # 新增
+
 from .config import get_config
 
 # 导入各个工具的命令
@@ -14,10 +15,9 @@ from .core.file_tool import list_cmd
 from .core.text_replace import replace_cmd
 
 
-@click.group()  # type: ignore[misc]
-@click.version_option(version=__version__)  # type: ignore[misc]
-@click.option("-v", "--verbose", is_flag=True, help="显示详细日志信息")  # type: ignore[misc]
-@click.pass_context  # type: ignore[misc]
+@command()
+@option("-v", "--verbose", is_flag=True, help="显示详细日志信息")
+@pass_context
 def cli(ctx: click.Context, verbose: bool) -> None:
     """简单工具集 - 一组实用的文件和文本处理工具."""
     # 创建上下文对象，用于在命令间共享配置

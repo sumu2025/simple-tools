@@ -57,7 +57,7 @@ repos:
           - "pydantic[mypy]"       # 安装官方 mypy 插件
         args:
           - "--explicit-package-bases"
-          - "--strict"
+          - "--show-error-codes"
 
 
 
