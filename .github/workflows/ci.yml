@@ -6,102 +6,146 @@ on:
   pull_request:
     branches: [ main ]
 
+# ================= 全局环境（Logfire） =================
 env:
-  # Logfire 配置
-  LOGFIRE_TOKEN: ${{ secrets.LOGFIRE_TOKEN }}
-  LOGFIRE_SEND_TO_LOGFIRE: "true"  # CI 中启用发送
-  LOGFIRE_SERVICE_NAME: "simple-tools-ci"  # CI 专用服务名
+  LOGFIRE_TOKEN:          ${{ secrets.LOGFIRE_TOKEN }}
+  LOGFIRE_SEND_TO_LOGFIRE: "true"
+  LOGFIRE_SERVICE_NAME:    "simple-tools-ci"
 
+# ======================================================
+# ① 代码质量检查（ruff / black / isort / mypy）
+# ======================================================
 jobs:
+  lint:
+    name: Lint & Type-check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: ⬇️ Checkout
+        uses: actions/checkout@v4
+
+      - name: 🐍 Install Python 3.13.3
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13.3"
+
+      - name: 📦 Install Poetry 2.1.3
+        uses: snok/install-poetry@v1
+        with:
+          version: "2.1.3"
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+
+      - name: ♻️ Cache Poetry venv
+        uses: actions/cache@v3
+        with:
+          path: .venv
+          key: ${{ runner.os }}-poetry-${{ hashFiles('**/poetry.lock') }}
+
+      - name: 📥 Install deps
+        run: poetry install --no-interaction --no-ansi
+
+      # ---------- 运行各项检查 ----------
+      - name: Ruff lint
+        run: poetry run ruff check src tests
+
+      - name: Black --check
+        run: poetry run black --check src tests
+
+      - name: isort --check
+        run: poetry run isort --check-only src tests
+
+      - name: mypy (strict)
+        # 限定源码目录，防止 duplicate-module 误判
+        run: poetry run mypy --strict src/simple_tools
+
+# ======================================================
+# ② 单元测试（含覆盖率）—— 仅在 lint 通过后执行
+# ======================================================
   test:
-    name: Test Python ${{ matrix.python-version }}
+    name: Py${{ matrix.python-version }} • ${{ matrix.os }}
+    needs: lint
     runs-on: ${{ matrix.os }}
 
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest]
-        python-version: ['3.13.3']
+        python-version: ["3.13.3"]
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: ⬇️ Checkout
+        uses: actions/checkout@v4
 
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v5
-      with:
-        python-version: ${{ matrix.python-version }}
+      - name: 🐍 Install Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
 
-    - name: Install Poetry
-      uses: snok/install-poetry@v1
-      with:
-        version: latest
-        virtualenvs-create: true
-        virtualenvs-in-project: true
+      - name: 📦 Install Poetry 2.1.3
+        uses: snok/install-poetry@v1
+        with:
+          version: "2.1.3"
+          virtualenvs-create: true
+          virtualenvs-in-project: true
 
-    - name: Cache dependencies
-      uses: actions/cache@v3
-      with:
-        path: .venv
-        key: ${{ runner.os }}-poetry-${{ hashFiles('**/poetry.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-poetry-
+      - name: ♻️ Cache Poetry venv
+        uses: actions/cache@v3
+        with:
+          path: .venv
+          key: ${{ runner.os }}-poetry-${{ hashFiles('**/poetry.lock') }}
 
-    - name: Install dependencies
-      run: |
-        poetry install --no-interaction --no-ansi
+      - name: 📥 Install deps
+        run: poetry install --no-interaction --no-ansi
 
-    - name: Run tests with coverage
-      run: |
-        poetry run pytest -v
+      - name: 🧪 Run pytest (+coverage)
+        run: poetry run pytest -v
 
-    - name: Generate coverage report
-      run: |
-        poetry run pytest --cov=src/simple_tools --cov-report=xml --cov-report=term-missing
+      - name: 📊 Generate coverage (xml + term)
+        run: |
+          poetry run pytest \
+            --cov=src/simple_tools \
+            --cov-report=xml \
+            --cov-report=term-missing \
+            --cov-fail-under=70
 
-    - name: Check coverage threshold
-      run: |
-        poetry run pytest --cov=src/simple_tools --cov-fail-under=70
+      - name: ☁️ Upload coverage artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ matrix.os }}-${{ github.run_id }}
+          path: |
+            coverage.xml
+            htmlcov/
 
-    - name: Upload coverage reports
-      uses: actions/upload-artifact@v4.6.2
-      with:
-        # ✅ 添加唯一 ID，避免同名冲突
-        name: coverage-report-${{ matrix.os }}-${{ matrix.python-version }}-${{ github.run_id }}
-        path: |
-          coverage.xml
-          htmlcov/
-      if: always()
-
+# ======================================================
+# ③ 构建发布包 —— 仅在测试全部通过后执行
+# ======================================================
   build:
-    name: Build Distribution
+    name: Build & Package
+    needs: test
     runs-on: ubuntu-latest
-    needs: [test]
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.13.3'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13.3"
 
-    - name: Install Poetry
-      uses: snok/install-poetry@v1
-      with:
-        version: latest
+      - uses: snok/install-poetry@v1
+        with:
+          version: "2.1.3"
 
-    - name: Build package
-      run: |
-        poetry build
+      - name: Build wheel / sdist
+        run: poetry build
 
-    - name: Upload distribution
-      uses: actions/upload-artifact@v4.6.2
-      with:
-        name: dist-${{ github.run_id }}  # ✅ 避免与其他 runs 冲突
-        path: dist/
+      - name: Upload dist
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ github.run_id }}
+          path: dist/
 
-    - name: Test installation
-      run: |
-        pip install dist/*.whl
-        tools --help
+      - name: Smoke-test install
+        run: |
+          pip install dist/*.whl
+          tools --help

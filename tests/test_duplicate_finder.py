@@ -1,54 +1,52 @@
-"""
-重复文件检测工具单元测试 - 测试find_duplicates功能
-"""
+"""重复文件检测工具单元测试 - 测试find_duplicates功能。."""
 
-import os
 from pathlib import Path
-import pytest
-from click.testing import CliRunner
+from typing import Any
+
 from simple_tools.core.duplicate_finder import (
-    DuplicateConfig, FileInfo, DuplicateGroup, DuplicateFinder,
-    format_size, display_duplicate_results, duplicates_cmd
+    DuplicateConfig,
+    DuplicateFinder,
+    DuplicateGroup,
+    FileInfo,
+    display_duplicate_results,
+    duplicates_cmd,
+    format_size,
 )
 
 
 class TestDataModels:
-    """测试数据模型"""
+    """测试数据模型。."""
 
-    def test_duplicate_config_model(self):
-        """测试DuplicateConfig模型"""
+    def test_duplicate_config_model(self) -> None:
+        """测试DuplicateConfig模型。."""
         config = DuplicateConfig(
             path="/test/path",
             recursive=True,
             min_size=1024,
-            extensions=[".txt", ".jpg"]
+            extensions=[".txt", ".jpg"],
         )
 
         assert config.path == "/test/path"
-        assert config.recursive == True
+        assert config.recursive
         assert config.min_size == 1024
         assert config.extensions == [".txt", ".jpg"]
 
-    def test_file_info_model(self):
-        """测试FileInfo模型"""
-        file_info = FileInfo(
-            path=Path("/test/file.txt"),
-            size=1024,
-            hash="abc123"
-        )
+    def test_file_info_model(self) -> None:
+        """测试FileInfo模型。."""
+        file_info = FileInfo(path=Path("/test/file.txt"), size=1024, hash="abc123")
 
         assert file_info.path == Path("/test/file.txt")
         assert file_info.size == 1024
         assert file_info.hash == "abc123"
 
-    def test_duplicate_group_model(self):
-        """测试DuplicateGroup模型"""
+    def test_duplicate_group_model(self) -> None:
+        """测试DuplicateGroup模型。."""
         group = DuplicateGroup(
             hash="abc123",
             size=1024,
             count=3,
             files=[Path("/file1.txt"), Path("/file2.txt"), Path("/file3.txt")],
-            potential_save=2048
+            potential_save=2048,
         )
 
         assert group.hash == "abc123"
@@ -59,10 +57,10 @@ class TestDataModels:
 
 
 class TestDuplicateFinder:
-    """测试DuplicateFinder核心功能"""
+    """测试DuplicateFinder核心功能。."""
 
-    def test_find_duplicates_basic(self, temp_dir):
-        """测试基本的重复文件检测"""
+    def test_find_duplicates_basic(self, temp_dir: Path) -> None:
+        """测试基本的重复文件检测。."""
         # 创建重复文件
         content = "This is duplicate content\n"
         (temp_dir / "file1.txt").write_text(content)
@@ -88,8 +86,8 @@ class TestDuplicateFinder:
         assert "file2.txt" in file_names
         assert "file3.txt" in file_names
 
-    def test_find_duplicates_no_duplicates(self, temp_dir):
-        """测试没有重复文件的情况"""
+    def test_find_duplicates_no_duplicates(self, temp_dir: Path) -> None:
+        """测试没有重复文件的情况。."""
         # 创建不同内容的文件
         (temp_dir / "file1.txt").write_text("Content 1")
         (temp_dir / "file2.txt").write_text("Content 2")
@@ -103,16 +101,16 @@ class TestDuplicateFinder:
         # 验证结果
         assert len(duplicates) == 0
 
-    def test_find_duplicates_empty_directory(self, temp_dir):
-        """测试空目录"""
+    def test_find_duplicates_empty_directory(self, temp_dir: Path) -> None:
+        """测试空目录。."""
         config = DuplicateConfig(path=str(temp_dir))
         finder = DuplicateFinder(config)
         duplicates = finder.find_duplicates()
 
         assert len(duplicates) == 0
 
-    def test_find_duplicates_with_subdirectories(self, temp_dir):
-        """测试递归扫描子目录"""
+    def test_find_duplicates_with_subdirectories(self, temp_dir: Path) -> None:
+        """测试递归扫描子目录。."""
         # 创建子目录结构
         subdir = temp_dir / "subdir"
         subdir.mkdir()
@@ -133,8 +131,8 @@ class TestDuplicateFinder:
         assert len(duplicates) == 1
         assert duplicates[0].count == 3
 
-    def test_find_duplicates_no_recursive(self, temp_dir):
-        """测试非递归扫描"""
+    def test_find_duplicates_no_recursive(self, temp_dir: Path) -> None:
+        """测试非递归扫描。."""
         # 创建子目录
         subdir = temp_dir / "subdir"
         subdir.mkdir()
@@ -154,8 +152,8 @@ class TestDuplicateFinder:
         assert len(duplicates) == 1
         assert duplicates[0].count == 2
 
-    def test_find_duplicates_min_size_filter(self, temp_dir):
-        """测试最小文件大小过滤"""
+    def test_find_duplicates_min_size_filter(self, temp_dir: Path) -> None:
+        """测试最小文件大小过滤。."""
         # 创建小文件（会被过滤）
         small_content = "A"
         (temp_dir / "small1.txt").write_text(small_content)
@@ -178,8 +176,8 @@ class TestDuplicateFinder:
         assert "large1.txt" in file_names
         assert "large2.txt" in file_names
 
-    def test_find_duplicates_extension_filter(self, temp_dir):
-        """测试文件扩展名过滤"""
+    def test_find_duplicates_extension_filter(self, temp_dir: Path) -> None:
+        """测试文件扩展名过滤。."""
         # 创建不同类型的重复文件
         content = "Same content\n"
         (temp_dir / "file1.txt").write_text(content)
@@ -199,8 +197,8 @@ class TestDuplicateFinder:
         for file_path in duplicates[0].files:
             assert file_path.suffix == ".txt"
 
-    def test_find_duplicates_multiple_groups(self, temp_dir):
-        """测试多组重复文件"""
+    def test_find_duplicates_multiple_groups(self, temp_dir: Path) -> None:
+        """测试多组重复文件。."""
         # 第一组重复文件
         content1 = "Content group 1\n"
         (temp_dir / "group1_file1.txt").write_text(content1)
@@ -223,8 +221,8 @@ class TestDuplicateFinder:
         # 验证按可节省空间排序（大的在前）
         assert duplicates[0].potential_save > duplicates[1].potential_save
 
-    def test_calculate_file_hash(self, temp_dir):
-        """测试文件哈希计算"""
+    def test_calculate_file_hash(self, temp_dir: Path) -> None:
+        """测试文件哈希计算。."""
         # 创建测试文件
         file_path = temp_dir / "test.txt"
         file_path.write_text("Test content for hash")
@@ -239,8 +237,8 @@ class TestDuplicateFinder:
         assert hash1 == hash2
         assert len(hash1) == 32  # MD5哈希长度
 
-    def test_potential_save_calculation(self, temp_dir):
-        """测试可节省空间计算"""
+    def test_potential_save_calculation(self, temp_dir: Path) -> None:
+        """测试可节省空间计算。."""
         # 创建3个相同的1KB文件
         content = "X" * 1024
         (temp_dir / "file1.txt").write_text(content)
@@ -258,17 +256,17 @@ class TestDuplicateFinder:
 
 
 class TestCLICommand:
-    """测试CLI命令"""
+    """测试CLI命令。."""
 
-    def test_duplicates_command_basic(self, temp_dir, cli_runner):
-        """测试基本的duplicates命令"""
+    def test_duplicates_command_basic(self, temp_dir: Path, cli_runner: Any) -> None:
+        """测试基本的duplicates命令。."""
         # 创建重复文件
         content = "Duplicate content\n"
         (temp_dir / "file1.txt").write_text(content)
         (temp_dir / "file2.txt").write_text(content)
 
         # 创建模拟的配置对象
-        mock_ctx = {"config": type('Config', (), {"verbose": False})()}
+        mock_ctx = {"config": type("Config", (), {"verbose": False})()}
 
         # 运行命令
         result = cli_runner.invoke(duplicates_cmd, [str(temp_dir)], obj=mock_ctx)
@@ -279,21 +277,25 @@ class TestCLICommand:
         assert "file1.txt" in result.output
         assert "file2.txt" in result.output
 
-    def test_duplicates_command_no_duplicates(self, temp_dir, cli_runner):
-        """测试没有重复文件的情况"""
+    def test_duplicates_command_no_duplicates(
+        self, temp_dir: Path, cli_runner: Any
+    ) -> None:
+        """测试没有重复文件的情况。."""
         # 创建不同的文件
         (temp_dir / "file1.txt").write_text("Content 1")
         (temp_dir / "file2.txt").write_text("Content 2")
 
-        mock_ctx = {"config": type('Config', (), {"verbose": False})()}
+        mock_ctx = {"config": type("Config", (), {"verbose": False})()}
 
         result = cli_runner.invoke(duplicates_cmd, [str(temp_dir)], obj=mock_ctx)
 
         assert result.exit_code == 0
         assert "未发现重复文件" in result.output
 
-    def test_duplicates_command_with_options(self, temp_dir, cli_runner):
-        """测试带选项的命令"""
+    def test_duplicates_command_with_options(
+        self, temp_dir: Path, cli_runner: Any
+    ) -> None:
+        """测试带选项的命令。."""
         # 创建测试文件
         content = "Test content\n"
         (temp_dir / "file1.txt").write_text(content)
@@ -301,13 +303,11 @@ class TestCLICommand:
         (temp_dir / "file3.jpg").write_text(content)
         (temp_dir / "file4.jpg").write_text(content)
 
-        mock_ctx = {"config": type('Config', (), {"verbose": False})()}
+        mock_ctx = {"config": type("Config", (), {"verbose": False})()}
 
         # 测试扩展名过滤
         result = cli_runner.invoke(
-            duplicates_cmd,
-            [str(temp_dir), "-e", ".txt"],
-            obj=mock_ctx
+            duplicates_cmd, [str(temp_dir), "-e", ".txt"], obj=mock_ctx
         )
 
         assert result.exit_code == 0
@@ -315,19 +315,19 @@ class TestCLICommand:
         assert "file2.txt" in result.output
         assert "file3.jpg" not in result.output
 
-    def test_duplicates_command_show_commands(self, temp_dir, cli_runner):
-        """测试显示删除命令建议"""
+    def test_duplicates_command_show_commands(
+        self, temp_dir: Path, cli_runner: Any
+    ) -> None:
+        """测试显示删除命令建议。."""
         # 创建重复文件
         content = "Duplicate\n"
         (temp_dir / "dup1.txt").write_text(content)
         (temp_dir / "dup2.txt").write_text(content)
 
-        mock_ctx = {"config": type('Config', (), {"verbose": False})()}
+        mock_ctx = {"config": type("Config", (), {"verbose": False})()}
 
         result = cli_runner.invoke(
-            duplicates_cmd,
-            [str(temp_dir), "--show-commands"],
-            obj=mock_ctx
+            duplicates_cmd, [str(temp_dir), "--show-commands"], obj=mock_ctx
         )
 
         assert result.exit_code == 0
@@ -335,8 +335,10 @@ class TestCLICommand:
         assert "rm " in result.output
         assert "警告：删除文件前请确认" in result.output
 
-    def test_duplicates_command_no_recursive(self, temp_dir, cli_runner):
-        """测试非递归选项"""
+    def test_duplicates_command_no_recursive(
+        self, temp_dir: Path, cli_runner: Any
+    ) -> None:
+        """测试非递归选项。."""
         # 创建子目录和文件
         subdir = temp_dir / "subdir"
         subdir.mkdir()
@@ -346,33 +348,27 @@ class TestCLICommand:
         (temp_dir / "file2.txt").write_text(content)
         (subdir / "file3.txt").write_text(content)
 
-        mock_ctx = {"config": type('Config', (), {"verbose": False})()}
+        mock_ctx = {"config": type("Config", (), {"verbose": False})()}
 
         # 使用 -n 选项（非递归）
-        result = cli_runner.invoke(
-            duplicates_cmd,
-            [str(temp_dir), "-n"],
-            obj=mock_ctx
-        )
+        result = cli_runner.invoke(duplicates_cmd, [str(temp_dir), "-n"], obj=mock_ctx)
 
         assert result.exit_code == 0
         assert "仅顶层目录" in result.output
         # 应该只找到顶层的2个文件
         assert "2 个文件" in result.output
 
-    def test_duplicates_command_min_size(self, temp_dir, cli_runner):
-        """测试最小文件大小选项"""
+    def test_duplicates_command_min_size(self, temp_dir: Path, cli_runner: Any) -> None:
+        """测试最小文件大小选项。."""
         # 创建小文件
         (temp_dir / "small1.txt").write_text("A")
         (temp_dir / "small2.txt").write_text("A")
 
-        mock_ctx = {"config": type('Config', (), {"verbose": False})()}
+        mock_ctx = {"config": type("Config", (), {"verbose": False})()}
 
         # 设置最小大小为1MB
         result = cli_runner.invoke(
-            duplicates_cmd,
-            [str(temp_dir), "-s", "1048576"],
-            obj=mock_ctx
+            duplicates_cmd, [str(temp_dir), "-s", "1048576"], obj=mock_ctx
         )
 
         assert result.exit_code == 0
@@ -380,17 +376,17 @@ class TestCLICommand:
 
 
 class TestUtilityFunctions:
-    """测试工具函数"""
+    """测试工具函数。."""
 
-    def test_format_size_function(self):
-        """测试format_size函数"""
+    def test_format_size_function(self) -> None:
+        """测试format_size函数。."""
         # 这个函数与file_tool中的相同，做基本测试
         assert format_size(0) == "0 B"
         assert format_size(1024) == "1.0 KB"
         assert format_size(1048576) == "1.0 MB"
 
-    def test_display_duplicate_results(self, capsys):
-        """测试结果显示函数"""
+    def test_display_duplicate_results(self, capsys: Any) -> None:
+        """测试结果显示函数。."""
         # 创建测试数据
         groups = [
             DuplicateGroup(
@@ -398,7 +394,7 @@ class TestUtilityFunctions:
                 size=1024,
                 count=2,
                 files=[Path("/file1.txt"), Path("/file2.txt")],
-                potential_save=1024
+                potential_save=1024,
             )
         ]
 
@@ -408,7 +404,7 @@ class TestUtilityFunctions:
             scan_path="/test/path",
             total_files=10,
             recursive=True,
-            show_commands=False
+            show_commands=False,
         )
 
         # 捕获输出

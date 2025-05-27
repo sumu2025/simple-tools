@@ -1,31 +1,73 @@
-# See https://pre-commit.com for more information
-# See https://pre-commit.com/hooks.html for more hooks
+# .pre-commit-config.yaml
+# ------------------------------------------------------------
+#  说明：
+#  1. 先在本地运行：   poetry run pre-commit install
+#     这样 git commit 时就会自动触发下面这些检查 / 自动修复
+#  2. 执行一次全量扫描：poetry run pre-commit run --all-files
+# ------------------------------------------------------------
 repos:
+  # ----------------- 基础代码质量钩子 -----------------
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.5.0
+    rev: v4.6.0          # 2025-05 最新
     hooks:
-      - id: trailing-whitespace
-      - id: end-of-file-fixer
-      - id: check-yaml
-      - id: check-added-large-files
-        args: ['--maxkb=5000']
-      - id: check-json
-      - id: check-toml
-      - id: check-merge-conflict
-      - id: debug-statements
+      - id: trailing-whitespace         # 删除行尾空白
+      - id: end-of-file-fixer           # 保证文件以换行结束
+      - id: check-added-large-files     # 避免误提交大文件
+      - id: check-merge-conflict        # 检查冲突标记
 
-  - repo: local
+  # ----------------- Black 格式化 -----------------
+  - repo: https://github.com/psf/black
+    rev: 25.1.0
     hooks:
-      - id: pytest
-        name: pytest
-        entry: poetry run pytest
-        language: system
-        pass_filenames: false
-        always_run: true
+      - id: black
+        language_version: python3.13
+        args: ["--line-length=88"]
 
-      - id: pytest-cov
-        name: pytest coverage check
-        entry: poetry run pytest --cov=src/simple_tools --cov-fail-under=70 -q
-        language: system
-        pass_filenames: false
-        always_run: true
+  # ----------------- isort 导入排序 -----------------
+  - repo: https://github.com/pycqa/isort
+    rev: 6.0.1
+    hooks:
+      - id: isort
+        language_version: python3.13
+        args: ["--profile=black", "--line-length=88"]
+
+  # ----------------- Ruff Linter（含 Docstring 规则） -----------------
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    # 与 ruff 0.11.11 匹配的镜像标签，一般保持同步即可
+    rev: v0.11.11
+    hooks:
+      - id: ruff
+        name: ruff (lint & fix --unsafe-fixes)
+        language_version: python3.13
+        args:
+          - "--fix"               # 自动修复能安全修的
+          - "--unsafe-fixes"      # 允许修 docstring/格式问题
+          - "src"
+          - "tests"
+
+  # ----------------- mypy 静态类型检查 -----------------
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.15.0
+    hooks:
+      - id: mypy
+        name: mypy (strict)
+        language_version: python3.13
+        additional_dependencies:
+          - "pydantic==2.11.5"
+          - "pydantic[mypy]"       # 安装官方 mypy 插件
+        args:
+          - "--explicit-package-bases"
+          - "--strict"
+
+
+
+  # ----------------- 自定义项目约束脚本 -----------------
+  # 例如检查“单个文件不超过 100 行”等，你可以在 scripts/ 下写脚本
+  # - repo: local
+  #   hooks:
+  #     - id: check-constraints
+  #       name: Check project constraints
+  #       entry: python scripts/check_constraints.py
+  #       language: system
+  #       types: [python]
+  #       language_version: python3.13

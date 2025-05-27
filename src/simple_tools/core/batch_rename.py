@@ -1,18 +1,17 @@
-"""
-批量重命名工具 - 支持文本替换和序号模式的文件重命名
-"""
+"""批量重命名工具 - 支持文本替换和序号模式的文件重命名."""
 
 import os
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import Optional
+
 import click
 import logfire
 from pydantic import BaseModel, Field
-from ..config import get_config
 
 
 class RenameConfig(BaseModel):
-    """批量重命名配置"""
+    """批量重命名配置."""
+
     path: str = Field(".", description="目标目录路径")
     pattern: str = Field(..., description="重命名模式")
     filter_pattern: str = Field("*", description="文件过滤模式")
@@ -22,7 +21,8 @@ class RenameConfig(BaseModel):
 
 
 class RenameItem(BaseModel):
-    """重命名项"""
+    """重命名项."""
+
     old_path: Path = Field(..., description="原始文件路径")
     new_path: Path = Field(..., description="新文件路径")
     status: str = Field("pending", description="状态：pending/success/failed/skipped")
@@ -30,29 +30,32 @@ class RenameItem(BaseModel):
 
 
 class RenameResult(BaseModel):
-    """重命名结果统计"""
+    """重命名结果统计."""
+
     total: int = Field(..., description="处理文件总数")
     success: int = Field(0, description="成功重命名数量")
     failed: int = Field(0, description="失败数量")
     skipped: int = Field(0, description="跳过数量")
-    items: List[RenameItem] = Field(default_factory=list, description="详细重命名项列表")
+    items: list[RenameItem] = Field(
+        default_factory=list, description="详细重命名项列表"
+    )
 
 
 class BatchRenameTool:
-    """批量重命名工具"""
+    """批量重命名工具."""
 
     def __init__(self, config: RenameConfig):
-        """
-        初始化批量重命名工具
-        参数：config - 重命名配置对象
+        """初始化批量重命名工具.
+
+        参数：config - 重命名配置对象.
         """
         self.config = config
-        logfire.info(f"初始化批量重命名工具", attributes={"config": config.model_dump()})
+        logfire.info("初始化批量重命名工具", attributes={"config": config.model_dump()})
 
-    def _scan_files(self) -> List[Path]:
-        """
-        扫描匹配的文件
-        返回：符合过滤条件的文件路径列表
+    def _scan_files(self) -> list[Path]:
+        """扫描匹配的文件.
+
+        返回：符合过滤条件的文件路径列表.
         """
         with logfire.span("scan_files", attributes={"path": self.config.path}):
             scan_path = Path(self.config.path)
@@ -75,11 +78,11 @@ class BatchRenameTool:
                 logfire.error(f"扫描文件失败: {str(e)}")
                 raise
 
-    def _parse_pattern(self, pattern: str) -> Tuple[str, str]:
-        """
-        解析重命名模式
+    def _parse_pattern(self, pattern: str) -> tuple[str, str]:
+        """解析重命名模式.
+
         参数：pattern - 重命名模式字符串
-        返回：(old_text, new_text) 元组
+        返回：(old_text, new_text) 元组.
         """
         if self.config.number_mode:
             # 序号模式：pattern作为前缀
@@ -92,13 +95,14 @@ class BatchRenameTool:
             else:
                 raise ValueError("文本替换模式需要使用 'old:new' 格式")
 
-    def _generate_new_name(self, file_path: Path, index: int = 0) -> Tuple[Path, bool]:
-        """
-        为文件生成新名称
+    def _generate_new_name(self, file_path: Path, index: int = 0) -> tuple[Path, bool]:
+        """为文件生成新名称.
+
         参数：
             file_path - 原始文件路径
             index - 文件索引（用于序号模式）
-        返回：(新的文件路径, 是否实际发生了改变)
+
+        返回：(新的文件路径, 是否实际发生了改变).
         """
         old_text, new_text = self._parse_pattern(self.config.pattern)
 
@@ -116,11 +120,11 @@ class BatchRenameTool:
         # 返回同目录下的新路径和是否改变的标志
         return file_path.parent / new_name, changed
 
-    def _check_conflicts_and_changes(self, items: List[RenameItem]) -> List[RenameItem]:
-        """
-        检查命名冲突和无效更改
+    def _check_conflicts_and_changes(self, items: list[RenameItem]) -> list[RenameItem]:
+        """检查命名冲突和无效更改.
+
         参数：items - 重命名项列表
-        返回：更新状态后的重命名项列表
+        返回：更新状态后的重命名项列表.
         """
         with logfire.span("check_conflicts"):
             for item in items:
@@ -143,11 +147,11 @@ class BatchRenameTool:
 
             return items
 
-    def preview_rename(self, items: List[RenameItem]) -> bool:
-        """
-        预览重命名结果并等待用户确认
+    def preview_rename(self, items: list[RenameItem]) -> bool:
+        """预览重命名结果并等待用户确认.
+
         参数：items - 重命名项列表
-        返回：用户是否确认继续执行
+        返回：用户是否确认继续执行.
         """
         if not items:
             click.echo("没有找到匹配的文件")
@@ -167,7 +171,10 @@ class BatchRenameTool:
                 click.echo(f"  {item.old_path.name:<30} → {item.new_path.name}")
                 valid_items += 1
             else:
-                click.echo(f"  {item.old_path.name:<30} → {item.new_path.name} (⚠️  {item.error})")
+                click.echo(
+                    f"  {item.old_path.name:<30} → {item.new_path.name} "
+                    f"(⚠️  {item.error})"
+                )
 
         if valid_items == 0:
             click.echo("\n❌ 没有可以重命名的文件")
@@ -179,13 +186,14 @@ class BatchRenameTool:
 
         # 等待用户确认
         click.echo(f"\n将重命名 {valid_items} 个文件")
-        return click.confirm("确认执行重命名？", default=False)
+        confirmed = click.confirm("确认执行重命名？", default=False)
+        return bool(confirmed)
 
-    def execute_rename(self, items: List[RenameItem]) -> RenameResult:
-        """
-        执行重命名操作
+    def execute_rename(self, items: list[RenameItem]) -> RenameResult:
+        """执行重命名操作.
+
         参数：items - 重命名项列表
-        返回：重命名结果统计
+        返回：重命名结果统计.
         """
         with logfire.span("execute_rename", attributes={"item_count": len(items)}):
             result = RenameResult(total=len(items), items=items)
@@ -195,7 +203,10 @@ class BatchRenameTool:
             for item in items:
                 if item.status != "pending":
                     result.skipped += 1
-                    click.echo(f"  ⚠️  {item.old_path.name} → {item.new_path.name} ({item.error})")
+                    click.echo(
+                        f"  ⚠️  {item.old_path.name} → {item.new_path.name} "
+                        f"({item.error})"
+                    )
                     continue
 
                 try:
@@ -209,29 +220,37 @@ class BatchRenameTool:
                     item.status = "failed"
                     item.error = str(e)
                     result.failed += 1
-                    click.echo(f"  ✗ {item.old_path.name} → {item.new_path.name} (错误: {str(e)})")
-                    logfire.error(f"重命名失败: {item.old_path} → {item.new_path}",
-                                attributes={"error": str(e)})
+                    click.echo(
+                        f"  ✗ {item.old_path.name} → {item.new_path.name} "
+                        f"(错误: {str(e)})"
+                    )
+                    logfire.error(
+                        f"重命名失败: {item.old_path} → {item.new_path}",
+                        attributes={"error": str(e)},
+                    )
 
             # 显示结果统计
-            click.echo(f"\n重命名完成：")
+            click.echo("\n重命名完成：")
             click.echo(f"  成功: {result.success} 个文件")
             click.echo(f"  失败: {result.failed} 个文件")
             click.echo(f"  跳过: {result.skipped} 个文件")
 
-            logfire.info(f"批量重命名完成", attributes={
-                "total": result.total,
-                "success": result.success,
-                "failed": result.failed,
-                "skipped": result.skipped
-            })
+            logfire.info(
+                "批量重命名完成",
+                attributes={
+                    "total": result.total,
+                    "success": result.success,
+                    "failed": result.failed,
+                    "skipped": result.skipped,
+                },
+            )
 
             return result
 
     def run(self) -> RenameResult:
-        """
-        运行批量重命名主流程
-        返回：重命名结果统计
+        """运行批量重命名主流程.
+
+        返回：重命名结果统计.
         """
         with logfire.span("batch_rename_run"):
             logfire.info("开始批量重命名流程")
@@ -256,7 +275,9 @@ class BatchRenameTool:
                         item.error = f"文件名中不包含要替换的文本 '{old_text}'"
                     items.append(item)
                 except Exception as e:
-                    logfire.error(f"生成新文件名失败: {file_path}", attributes={"error": str(e)})
+                    logfire.error(
+                        f"生成新文件名失败: {file_path}", attributes={"error": str(e)}
+                    )
                     raise click.ClickException(f"错误：{str(e)}")
 
             # 3. 检查命名冲突
@@ -267,30 +288,37 @@ class BatchRenameTool:
                 # 预览模式：显示预览并等待确认
                 if not self.preview_rename(items):
                     click.echo("操作已取消")
-                    return RenameResult(total=len(items), skipped=len(items), items=items)
+                    return RenameResult(
+                        total=len(items), skipped=len(items), items=items
+                    )
 
             # 5. 执行重命名
             return self.execute_rename(items)
 
 
-@click.command()
-@click.argument("pattern", required=True)
-@click.option("-p", "--path", type=click.Path(exists=True), default=".",
-              help="目标目录路径")
-@click.option("-f", "--filter", default="*",
-              help="文件过滤模式，如 '*.jpg'")
-@click.option("-n", "--number", is_flag=True,
-              help="序号模式：为文件添加数字序号")
-@click.option("--execute", is_flag=True,
-              help="直接执行，跳过预览")
-@click.option("-y", "--yes", is_flag=True,
-              help="跳过确认提示")
-@click.pass_context
-def rename_cmd(ctx, pattern, path, filter, number, execute, yes):
-    """
-    批量重命名文件
+@click.command()  # type: ignore[misc]
+@click.argument("pattern", required=True)  # type: ignore[misc]
+@click.option(
+    "-p", "--path", type=click.Path(exists=True), default=".", help="目标目录路径"
+)  # type: ignore[misc]
+@click.option("-f", "--filter", default="*", help="文件过滤模式，如 '*.jpg'")  # type: ignore[misc]
+@click.option("-n", "--number", is_flag=True, help="序号模式：为文件添加数字序号")  # type: ignore[misc]
+@click.option("--execute", is_flag=True, help="直接执行，跳过预览")  # type: ignore[misc]
+@click.option("-y", "--yes", is_flag=True, help="跳过确认提示")  # type: ignore[misc]
+@click.pass_context  # type: ignore[misc]
+def rename_cmd(
+    ctx: click.Context,
+    pattern: str,
+    path: str,
+    filter: str,
+    number: bool,
+    execute: bool,
+    yes: bool,
+) -> None:
+    """批量重命名文件.
 
     PATTERN: 重命名模式
+
     - 文本替换模式: "old:new" (将文件名中的old替换为new)
     - 序号模式: 配合 --number 选项，PATTERN作为前缀
 
@@ -309,14 +337,14 @@ def rename_cmd(ctx, pattern, path, filter, number, execute, yes):
             filter_pattern=filter,
             number_mode=number,
             dry_run=not execute,  # execute为True时关闭预览模式
-            skip_confirm=yes
+            skip_confirm=yes,
         )
 
         # 创建工具并执行
         tool = BatchRenameTool(config)
-        result = tool.run()
+        tool.run()
 
-    except click.ClickException as e:
+    except click.ClickException:
         # Click异常直接传播
         raise
     except Exception as e:

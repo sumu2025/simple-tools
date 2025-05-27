@@ -1,21 +1,25 @@
-"""
-命令行入口 - 使用Click框架实现命令行界面
-"""
+"""命令行入口 - 使用Click框架实现命令行界面."""
 
 import click
 import logfire
+
 from . import __version__
 from .config import get_config
 
+# 导入各个工具的命令
+from .core.batch_rename import rename_cmd
+from .core.duplicate_finder import duplicates_cmd
+from .core.file_organizer import organize_cmd
+from .core.file_tool import list_cmd
+from .core.text_replace import replace_cmd
 
-@click.group()
-@click.version_option(version=__version__)
-@click.option("-v", "--verbose", is_flag=True, help="显示详细日志信息")
-@click.pass_context
-def cli(ctx, verbose):
-    """
-    简单工具集 - 一组实用的文件和文本处理工具
-    """
+
+@click.group()  # type: ignore[misc]
+@click.version_option(version=__version__)  # type: ignore[misc]
+@click.option("-v", "--verbose", is_flag=True, help="显示详细日志信息")  # type: ignore[misc]
+@click.pass_context  # type: ignore[misc]
+def cli(ctx: click.Context, verbose: bool) -> None:
+    """简单工具集 - 一组实用的文件和文本处理工具."""
     # 创建上下文对象，用于在命令间共享配置
     ctx.ensure_object(dict)
 
@@ -29,14 +33,6 @@ def cli(ctx, verbose):
     # 使用Logfire记录命令执行
     with logfire.span("cli_command", attributes={"verbose": verbose}):
         pass  # 实际操作在子命令中执行
-
-
-# 导入各个工具的命令
-from .core.file_tool import list_cmd
-from .core.duplicate_finder import duplicates_cmd
-from .core.batch_rename import rename_cmd
-from .core.text_replace import replace_cmd
-from .core.file_organizer import organize_cmd
 
 
 # 注册命令到CLI

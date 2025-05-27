@@ -1,56 +1,57 @@
-"""
-重复文件检测工具 - 智能查找目录中的重复文件
-"""
+"""重复文件检测工具 - 智能查找目录中的重复文件."""
 
-import os
 import hashlib
-from pathlib import Path
-from typing import List, Dict, Optional
+import os
 from collections import defaultdict
+from pathlib import Path
+from typing import Optional
+
 import click
 import logfire
 from pydantic import BaseModel, Field
-from ..config import get_config
 
 
 class DuplicateConfig(BaseModel):
-    """重复文件检测配置"""
+    """重复文件检测配置."""
+
     path: str = Field(..., description="扫描路径")
     recursive: bool = Field(True, description="是否递归扫描子目录")
     min_size: int = Field(1, description="最小文件大小（字节）")
-    extensions: Optional[List[str]] = Field(None, description="指定文件扩展名")
+    extensions: Optional[list[str]] = Field(None, description="指定文件扩展名")
 
 
 class FileInfo(BaseModel):
-    """文件信息"""
+    """文件信息."""
+
     path: Path = Field(..., description="文件路径")
     size: int = Field(..., description="文件大小（字节）")
     hash: Optional[str] = Field(None, description="文件MD5哈希值")
 
 
 class DuplicateGroup(BaseModel):
-    """重复文件组"""
+    """重复文件组."""
+
     hash: str = Field(..., description="文件MD5哈希值")
     size: int = Field(..., description="文件大小（字节）")
     count: int = Field(..., description="重复文件数量")
-    files: List[Path] = Field(..., description="重复文件路径列表")
+    files: list[Path] = Field(..., description="重复文件路径列表")
     potential_save: int = Field(..., description="可节省空间（字节）保留一个文件")
 
 
 class DuplicateFinder:
-    """重复文件检测器"""
+    """重复文件检测器."""
 
     def __init__(self, config: DuplicateConfig):
-        """
-        初始化重复文件检测器
+        """初始化重复文件检测器.
+
         参数：config - 检测配置对象
         """
         self.config = config
-        logfire.info(f"初始化重复文件检测器", attributes={"config": config.model_dump()})
+        logfire.info("初始化重复文件检测器", attributes={"config": config.model_dump()})
 
     def _calculate_file_hash(self, file_path: Path) -> str:
-        """
-        计算文件的MD5哈希值（分块读取，避免大文件内存问题）
+        """计算文件的MD5哈希值（分块读取，避免大文件内存问题）.
+
         参数：file_path - 文件路径对象
         返回：MD5哈希值字符串
         """
@@ -63,12 +64,14 @@ class DuplicateFinder:
                     hash_md5.update(chunk)
             return hash_md5.hexdigest()
         except Exception as e:
-            logfire.error(f"计算文件哈希失败: {file_path}", attributes={"error": str(e)})
+            logfire.error(
+                f"计算文件哈希失败: {file_path}", attributes={"error": str(e)}
+            )
             raise
 
     def _should_include_file(self, file_path: Path) -> bool:
-        """
-        判断文件是否应该包含在检测范围内
+        """判断文件是否应该包含在检测范围内.
+
         参数：file_path - 文件路径对象
         返回：布尔值，True表示应该包含
         """
@@ -87,9 +90,9 @@ class DuplicateFinder:
 
         return True
 
-    def _scan_files(self) -> List[FileInfo]:
-        """
-        扫描目录获取所有符合条件的文件信息
+    def _scan_files(self) -> list[FileInfo]:
+        """扫描目录获取所有符合条件的文件信息.
+
         返回：FileInfo对象列表
         """
         with logfire.span("scan_files", attributes={"path": self.config.path}):
@@ -117,10 +120,7 @@ class DuplicateFinder:
                     file_size = file_path.stat().st_size
 
                     # 创建文件信息对象
-                    files.append(FileInfo(
-                        path=file_path,
-                        size=file_size
-                    ))
+                    files.append(FileInfo(path=file_path, size=file_size))
 
                 logfire.info(f"扫描完成，找到 {len(files)} 个文件")
                 return files
@@ -129,9 +129,9 @@ class DuplicateFinder:
                 logfire.error(f"扫描文件失败: {str(e)}")
                 raise
 
-    def find_duplicates(self) -> List[DuplicateGroup]:
-        """
-        查找重复文件
+    def find_duplicates(self) -> list[DuplicateGroup]:
+        """查找重复文件.
+
         返回：DuplicateGroup对象列表，每个组包含重复的文件
         """
         with logfire.span("find_duplicates"):
@@ -151,11 +151,12 @@ class DuplicateFinder:
 
             # 过滤掉只有一个文件的大小组
             potential_duplicates = {
-                size: files for size, files in size_groups.items()
-                if len(files) > 1
+                size: files for size, files in size_groups.items() if len(files) > 1
             }
 
-            logfire.info(f"按大小分组后，{len(potential_duplicates)} 个大小组可能包含重复文件")
+            logfire.info(
+                f"按大小分组后，{len(potential_duplicates)} 个大小组可能包含重复文件"
+            )
 
             # 第三步：对相同大小的文件计算哈希值
             duplicate_groups = []
@@ -187,7 +188,7 @@ class DuplicateFinder:
                             size=file_size,
                             count=len(duplicate_files),
                             files=[f.path for f in duplicate_files],
-                            potential_save=potential_save
+                            potential_save=potential_save,
                         )
 
                         duplicate_groups.append(duplicate_group)
@@ -200,15 +201,15 @@ class DuplicateFinder:
             return duplicate_groups
 
 
-def format_size(size_bytes):
-    """
-    将字节数转换为人类可读的文件大小格式
+def format_size(size_bytes: int) -> str:
+    """将字节数转换为人类可读的文件大小格式.
+
     复用file_tool.py中的函数逻辑
     """
     if size_bytes == 0:
         return "0 B"
 
-    units = ['B', 'KB', 'MB', 'GB']
+    units = ["B", "KB", "MB", "GB"]
     unit_index = 0
     size = float(size_bytes)
 
@@ -219,13 +220,15 @@ def format_size(size_bytes):
     return f"{size:.1f} {units[unit_index]}"
 
 
-def display_duplicate_results(duplicate_groups: List[DuplicateGroup],
-                            scan_path: str,
-                            total_files: int,
-                            recursive: bool,
-                            show_commands: bool = False):
-    """
-    友好展示重复文件检测结果
+def display_duplicate_results(
+    duplicate_groups: list[DuplicateGroup],
+    scan_path: str,
+    total_files: int,
+    recursive: bool,
+    show_commands: bool = False,
+) -> None:
+    """友好展示重复文件检测结果.
+
     参数：
         duplicate_groups - 重复文件组列表
         scan_path - 扫描路径
@@ -255,9 +258,11 @@ def display_duplicate_results(duplicate_groups: List[DuplicateGroup],
         total_save_space += group.potential_save
 
         # 显示组标题
-        click.echo(f"【第 {index} 组】{group.count} 个文件, "
-                  f"每个 {format_size(group.size)}, "
-                  f"可节省 {format_size(group.potential_save)}")
+        click.echo(
+            f"【第 {index} 组】{group.count} 个文件, "
+            f"每个 {format_size(group.size)}, "
+            f"可节省 {format_size(group.potential_save)}"
+        )
 
         # 显示文件列表
         for file_path in group.files:
@@ -274,29 +279,42 @@ def display_duplicate_results(duplicate_groups: List[DuplicateGroup],
 
     # 显示总结统计
     click.echo("━" * 60)
-    click.echo(f"总计：{total_duplicates} 个重复文件，"
-              f"可节省 {format_size(total_save_space)} 空间")
+    click.echo(
+        f"总计：{total_duplicates} 个重复文件，"
+        f"可节省 {format_size(total_save_space)} 空间"
+    )
 
     if show_commands:
         click.echo("\n⚠️  警告：删除文件前请确认重要性，建议先备份！")
 
 
-@click.command()
-@click.argument("path", type=click.Path(exists=True), default=".")
-@click.option("-r", "--recursive", is_flag=True, default=True,
-              help="递归扫描子目录（默认启用）")
-@click.option("-n", "--no-recursive", is_flag=True,
-              help="仅扫描顶层目录，不递归")
-@click.option("-s", "--min-size", type=int, default=1,
-              help="最小文件大小（字节），默认1")
-@click.option("-e", "--extension", multiple=True,
-              help="指定文件扩展名（可多次使用），如：-e .jpg -e .png")
-@click.option("--show-commands", is_flag=True,
-              help="显示删除重复文件的建议命令")
-@click.pass_context
-def duplicates_cmd(ctx, path, recursive, no_recursive, min_size, extension, show_commands):
-    """
-    查找指定目录中的重复文件
+@click.command()  # type: ignore[misc]
+@click.argument("path", type=click.Path(exists=True), default=".")  # type: ignore[misc]
+@click.option(
+    "-r", "--recursive", is_flag=True, default=True, help="递归扫描子目录（默认启用）"
+)  # type: ignore[misc]
+@click.option("-n", "--no-recursive", is_flag=True, help="仅扫描顶层目录，不递归")  # type: ignore[misc]
+@click.option(
+    "-s", "--min-size", type=int, default=1, help="最小文件大小（字节），默认1"
+)  # type: ignore[misc]
+@click.option(
+    "-e",
+    "--extension",
+    multiple=True,
+    help="指定文件扩展名（可多次使用），如：-e .jpg -e .png",
+)  # type: ignore[misc]
+@click.option("--show-commands", is_flag=True, help="显示删除重复文件的建议命令")  # type: ignore[misc]
+@click.pass_context  # type: ignore[misc]
+def duplicates_cmd(
+    ctx: click.Context,
+    path: str,
+    recursive: bool,
+    no_recursive: bool,
+    min_size: int,
+    extension: tuple[str, ...],
+    show_commands: bool,
+) -> None:
+    """查找指定目录中的重复文件.
 
     PATH: 要扫描的目录路径（默认为当前目录）
 
@@ -317,10 +335,7 @@ def duplicates_cmd(ctx, path, recursive, no_recursive, min_size, extension, show
     try:
         # 创建配置对象
         config = DuplicateConfig(
-            path=path,
-            recursive=recursive,
-            min_size=min_size,
-            extensions=extensions
+            path=path, recursive=recursive, min_size=min_size, extensions=extensions
         )
 
         # 创建检测器并执行检测
@@ -342,10 +357,10 @@ def duplicates_cmd(ctx, path, recursive, no_recursive, min_size, extension, show
             scan_path=os.path.abspath(path),
             total_files=total_files,
             recursive=recursive,
-            show_commands=show_commands
+            show_commands=show_commands,
         )
 
-    except click.ClickException as e:
+    except click.ClickException:
         # Click异常直接传播
         raise
     except Exception as e:

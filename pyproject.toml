@@ -4,18 +4,23 @@ version = "0.1.0"
 description = "一个简单实用的Python工具集，专注解决日常工作中的实际问题"
 authors = ["peacock"]
 readme = "README.md"
-packages = [{include = "simple_tools", from = "src"}]
+packages = [{ include = "simple_tools", from = "src" }]
 
 [tool.poetry.dependencies]
-python = "^3.13.3"
-click = "^8.1"
-pydantic = "^2.11.5"
-logfire = "^3.16.0"
+python   = "^3.13.3"            # 项目基于 3.13.3；^ 允许 3.x 后续 patch
+click    = "^8.2.1"             # 8.2.1 为 8.x 最新，支持 3.13
+pydantic = "^2.11.5"            # 2.11.5 为 v2 系列最新；享受 dataclass-like TypedDict
+logfire  = "^3.16.0"            # 3.16.0 是 2025-05-14 最新版，引入显式 configure 行为
 
 [tool.poetry.group.dev.dependencies]
-pytest = "^8.0"
-pytest-cov = "^5.0"
-pre-commit = "^3.5.0"
+pytest      = "^8.3.5"          # 与 CI 一致；8.3.5 为 2025-05-26 发布
+pytest-cov  = "^6.1.1"          # Pytest-cov 最新
+pre-commit  = "^4.2.0"          #  对 Python 3.13 友好
+black       = "^25.1.0"         # 24-May-2025 版，已支持 3.13
+isort       = "^6.0.1"         # 最新 6.x，兼容 black
+ruff        = "^0.11.11"          # 0.11 系列最新，速度快、规则多
+mypy        = "^1.15.0"         # 1.15.0 首次官方支持 Python 3.13
+types-click = "^7.1.8"          # click 的类型存根，消除 stub 警告
 
 [tool.poetry.scripts]
 tools = "simple_tools.cli:cli"
@@ -24,6 +29,7 @@ tools = "simple_tools.cli:cli"
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
 
+# -------------------------  Pytest 配置  -------------------------
 [tool.pytest.ini_options]
 addopts = [
     "-v",
@@ -33,9 +39,9 @@ addopts = [
     "--cov-report=html",
     "--cov-fail-under=70"
 ]
-testpaths = ["tests"]
-python_files = "test_*.py"
-python_classes = "Test*"
+testpaths        = ["tests"]
+python_files     = "test_*.py"
+python_classes   = "Test*"
 python_functions = "test_*"
 filterwarnings = [
     "error::DeprecationWarning",
@@ -43,6 +49,7 @@ filterwarnings = [
     "ignore::DeprecationWarning:logfire.*"
 ]
 
+# -------------------------  Coverage 配置  -------------------------
 [tool.coverage.run]
 source = ["src/simple_tools"]
 branch = true
@@ -54,10 +61,10 @@ omit = [
 ]
 
 [tool.coverage.report]
-fail_under = 70
-precision = 1
+fail_under   = 70
+precision    = 1
 show_missing = true
-skip_empty = true
+skip_empty   = true
 exclude_lines = [
     "pragma: no cover",
     "def __repr__",
@@ -66,11 +73,38 @@ exclude_lines = [
     "raise AssertionError",
     "raise NotImplementedError",
     "if 0:",
-    "if __name__ == '__main__':",       # CLI 启动脚本入口
-    "if TYPE_CHECKING:",                # 静态类型检查代码块
-    "class .*Protocol.*:",              # 类型协议定义（PEP 544）
-    "@(abc\\.)?abstractmethod"          # 抽象接口方法
+    "if __name__ == '__main__':",  # CLI 启动脚本入口
+    "if TYPE_CHECKING:",           # 静态类型检查代码块
+    "class .*Protocol.*:",         # 类型协议定义（PEP 544）
+    "@(abc\\.)?abstractmethod"     # 抽象接口方法
 ]
 
 [tool.coverage.html]
 directory = "htmlcov"
+
+# -------------------------  Black 配置  -------------------------
+[tool.black]                       # ← 新增
+line-length    = 88
+target-version = ["py313"]
+
+# -------------------------  isort 配置  -------------------------
+[tool.isort]                       # ← 新增
+profile      = "black"             # 与 Black 对齐
+line_length  = 88
+
+# -------------------------  Ruff 配置  -------------------------
+[tool.ruff]
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "UP", "C90", "D"]
+ignore = ["D203", "D213"]
+# -------------------------  mypy 配置  -------------------------
+[tool.mypy]                        # ← 新增
+python_version        = "3.13"
+strict                = true       # 打开 mypy 全严格模式
+ignore_missing_imports = true      # 第三方库缺乏类型提示时不报错
+plugins = ["pydantic.mypy"]        # 官方 Pydantic v2 mypy 插件
+# 如果严格模式过多误报，可按需设置：
+# allow_redefinition = true
+# warn_unused_configs = true
