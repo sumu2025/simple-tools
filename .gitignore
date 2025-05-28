@@ -77,3 +77,4 @@ test_data/
 # Local environment variables
 .env.local
 .env.*.local
+docs/project_log.md
