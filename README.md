@@ -4,6 +4,7 @@
 [![Coverage](https://img.shields.io/badge/coverage-70%25-yellowgreen)](https://github.com/sumu2025/simple-tools)
 [![Python](https://img.shields.io/badge/python-3.13+-blue)](https://www.python.org/downloads/)
 [![Poetry](https://img.shields.io/badge/poetry-managed-blueviolet)](https://python-poetry.org/)
+[![PyPI](https://img.shields.io/pypi/v/sumu-simple-tools)](https://pypi.org/project/sumu-simple-tools/)
 
 一个简单实用的 Python 工具集，专注解决日常工作中的实际问题。
 
@@ -16,10 +17,12 @@
 
 ## 📦 安装
 
-### 使用 pip（发布后）
+### 使用 pip 安装
 ```bash
-pip install simple-tools
+pip install sumu-simple-tools
 ```
+
+> **注意**：由于 PyPI 上 `simple-tools` 名称已被占用，本项目在 PyPI 上的包名为 `sumu-simple-tools`，但安装后命令行工具仍然是 `tools`。
 
 ### 从源码安装
 ```bash

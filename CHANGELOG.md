@@ -6,6 +6,8 @@
 
 ## [0.1.0] - 2025-05-28
 
+首个正式版本，已发布到 [PyPI](https://pypi.org/project/sumu-simple-tools/)。
+
 ### 新增
 - 初始化项目结构，使用 Poetry 管理依赖
 - 完成 5 个核心工具的开发：
