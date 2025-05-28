@@ -1,9 +1,22 @@
 [tool.poetry]
-name = "simple-tools"
+name = "sumu-simple-tools"         # 用新包名
 version = "0.1.0"
 description = "一个简单实用的Python工具集，专注解决日常工作中的实际问题"
-authors = ["peacock"]
+authors = ["peacock <weipeacock@gmail.com>"]
+license = "MIT"
 readme = "README.md"
+keywords = ["tools", "cli", "file", "rename", "duplicate", "organize"]
+homepage = "https://github.com/sumu2025/simple-tools"
+repository = "https://github.com/sumu2025/simple-tools"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.13",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Intended Audience :: Developers",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Utilities"
+]
 packages = [{ include = "simple_tools", from = "src" }]
 
 [tool.poetry.dependencies]
