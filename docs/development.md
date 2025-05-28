@@ -1,6 +1,14 @@
-# 简单工具集项目开发指南 v2.1
+# 简单工具集项目开发指南 v2.2
 
-*文档版本: 2.1.0 | 更新日期: 2025-05-24 | 最后验证日期: 2025-05-24*
+*文档版本: 2.2.0 | 更新日期: 2025-05-28 | 最后验证日期: 2025-05-28*
+
+## 更新说明
+
+### v2.2 版本更新 (2025-05-28)
+- ✅ 第一阶段所有工具开发完成
+- ✅ 全部工具通过CI测试，测试覆盖率达到70%+
+- ✅ 完成代码质量工具集成 (pre-commit, black, isort, ruff, mypy)
+- ✅ 更新开发状态和项目进度
 
 ## 1. 项目概述
 
@@ -29,6 +37,7 @@ Logfire版本: 3.16.0+
 依赖管理工具：Poetry
 CLI框架：Click
 测试框架：pytest
+代码质量工具：pre-commit, black, isort, ruff, mypy
 ```
 
 ### 2.2 项目目录结构
@@ -36,15 +45,19 @@ CLI框架：Click
 simple-tools/
 ├── pyproject.toml       # Poetry项目配置
 ├── poetry.lock          # 依赖版本锁定
+├── .pre-commit-config.yaml  # pre-commit配置
 ├── src/
 │   └── simple_tools/
 │       ├── __init__.py  # Logfire监控初始化
 │       ├── cli.py       # Click命令行入口
-│       ├── core/        # 核心功能模块
-│       │   ├── file_tool.py      # 文件处理工具
-│       │   ├── text_tool.py      # 文本处理工具
-│       │   └── ...               # 其他工具模块
-│       └── config.py    # 配置管理中心
+│       ├── _typing.py   # 类型定义
+│       ├── config.py    # 配置管理中心
+│       └── core/        # 核心功能模块
+│           ├── file_tool.py         # 文件列表工具
+│           ├── duplicate_finder.py  # 重复文件检测
+│           ├── batch_rename.py      # 批量重命名
+│           ├── text_replace.py      # 文本替换
+│           └── file_organizer.py    # 文件整理
 ├── tests/               # pytest测试套件
 │   ├── conftest.py      # 测试配置
 │   └── test_*.py        # 具体测试文件
@@ -52,22 +65,29 @@ simple-tools/
 ├── docs/                # 项目文档
 │   └── development.md   # 本开发指南
 ├── README.md            # 项目说明
+├── CHANGELOG.md         # 版本更新日志
 └── .gitignore          # Git忽略配置
 ```
 
 ### 2.3 依赖管理策略
 
-#### 核心依赖（必需）
+#### 核心依赖（已安装）
 ```toml
 [tool.poetry.dependencies]
-python = "^3.13"
-click = "^8.1"         # CLI命令行框架
-pydantic = "^2.11"     # 数据验证（严格v2.x）
+python = "^3.13.3"
+click = "^8.2.1"       # CLI命令行框架
+pydantic = "^2.11.5"   # 数据验证（严格v2.x）
 logfire = "^3.16.0"    # 监控日志系统
 
 [tool.poetry.group.dev.dependencies]
-pytest = "^8.0"        # 单元测试框架
-pytest-cov = "^5.0"    # 测试覆盖率统计
+pytest = "^8.3.5"      # 单元测试框架
+pytest-cov = "^6.1.1"  # 测试覆盖率统计
+pre-commit = "^4.2.0"  # Git钩子管理
+black = "^25.1.0"      # 代码格式化
+isort = "^6.0.1"       # 导入排序
+ruff = "^0.11.11"      # 代码检查
+mypy = "^1.15.0"       # 类型检查
+types-click = "^7.1.8" # Click类型存根
 ```
 
 #### 可选依赖（按需添加）
@@ -193,25 +213,40 @@ def safe_operation(func):
 
 ## 5. 开发阶段规划
 
-### 第一阶段：基础工具开发（1-2周）
+### 第一阶段：基础工具开发（已完成 ✅）
 **目标**：完成5个核心工具，建立项目基础框架
 
-| 工具名称 | 功能说明 | 开发状态 | CLI命令 |
-|----------|----------|----------|---------|
-| list_files | 智能文件列表展示 | ✅ 已完成 | `tools list PATH` |
-| find_duplicates | 重复文件检测清理 | ⏳ 待开发 | `tools duplicates PATH` |
-| batch_rename | 批量文件重命名 | ⏳ 待开发 | `tools rename PATTERN` |
-| text_replace | 文本批量替换 | ⏳ 待开发 | `tools replace FILE` |
-| file_organizer | 自动文件整理 | ⏳ 待开发 | `tools organize PATH` |
+**完成时间**：2025-05-28
+
+| 工具名称 | 功能说明 | 开发状态 | CLI命令 | 实现文件 |
+|----------|----------|----------|---------|----------|
+| list_files | 智能文件列表展示 | ✅ 已完成 | `tools list PATH` | file_tool.py |
+| find_duplicates | 重复文件检测清理 | ✅ 已完成 | `tools duplicates PATH` | duplicate_finder.py |
+| batch_rename | 批量文件重命名 | ✅ 已完成 | `tools rename PATTERN` | batch_rename.py |
+| text_replace | 文本批量替换 | ✅ 已完成 | `tools replace PATTERN` | text_replace.py |
+| file_organizer | 自动文件整理 | ✅ 已完成 | `tools organize PATH` | file_organizer.py |
+
+**第一阶段成果总结**：
+- ✅ 完成全部5个核心工具开发
+- ✅ 所有工具集成到统一CLI命令
+- ✅ 单元测试覆盖率达到70%+
+- ✅ 配置GitHub Actions CI/CD
+- ✅ 集成代码质量工具 (pre-commit, black, isort, ruff, mypy)
+- ✅ 完成Logfire监控集成
+- ✅ 项目文档和README完善
 
 ### 第二阶段：功能完善优化（3-4周）
 **目标**：提升工具使用体验和稳定性
+
+**状态**：⏳ 即将开始
 
 **主要任务**：
 - 完善异常错误处理机制
 - 添加操作进度显示功能
 - 实现多种输出格式支持
-- 编写完整的单元测试套件
+- 优化大文件处理性能
+- 增强用户交互体验
+- 添加配置文件支持
 
 ### 第三阶段：智能化能力增强（5-8周）
 **目标**：选择性集成AI能力，保持简单原则
@@ -246,13 +281,16 @@ poetry init
 poetry add python@^3.13 click@^8.1 pydantic@^2.11 logfire@^3.16.0
 poetry add --group dev pytest@^8.0 pytest-cov@^5.0
 
-# 4. 可选：添加环境变量支持
-# poetry add python-dotenv
+# 4. 添加代码质量工具
+poetry add --group dev pre-commit black isort ruff mypy types-click
 
 # 5. 安装依赖
 poetry install
 
-# 6. 初始化Git
+# 6. 配置pre-commit
+pre-commit install
+
+# 7. 初始化Git
 git init
 echo "/sandbox/" >> .gitignore
 echo ".env" >> .gitignore
@@ -268,7 +306,8 @@ echo ".venv/" >> .gitignore
 3. 编写相应的pytest单元测试
 4. 使用Logfire添加关键监控日志
 5. 在sandbox环境进行手动测试
-6. 代码审查通过后提交版本控制
+6. 运行pre-commit检查代码质量
+7. 代码审查通过后提交版本控制
 
 ### 6.3 工具开发模板
 ```python
@@ -438,22 +477,19 @@ poetry run python
 ```markdown
 # 更新日志
 
-## [0.1.1] - 2025-05-24
+## [0.1.0] - 2025-05-28
 ### 新增
-- 完成 list_files 工具基础功能
-- 添加 Logfire 监控集成
+- 完成 5 个核心工具开发
+- 集成 Logfire 监控系统
+- 配置 GitHub Actions CI/CD
+- 添加 pre-commit 代码质量检查
 
-### 修复
-- 修复路径处理中的编码问题
-
-### 变更
-- 优化文件大小显示格式
-
-## [0.1.0] - 2025-05-23
-### 新增
-- 项目初始化
-- 基础目录结构创建
-- Poetry 依赖配置
+### 技术栈
+- Python 3.13.3+
+- Pydantic 2.11.5+
+- Logfire 3.16.0+
+- Click 8.1+
+- pytest 8.0+
 ```
 
 ### 8.3 Git工作流程
@@ -494,7 +530,7 @@ git add pyproject.toml CHANGELOG.md
 git commit -m "chore: 发布版本 0.1.1"
 
 # 4. 创建版本标签
-git tag -a v0.1.1 -m "版本 0.1.1"
+git tag -a v0.1.0 -m "版本 0.1.0"
 git push origin main --tags
 ```
 
@@ -578,7 +614,7 @@ def process_files(path: str) -> List[str]:
 ## 10. 项目成功标准
 
 ### 10.1 各阶段验收标准
-1. **第一阶段验收**：5个核心工具都能正常运行
+1. **第一阶段验收**：✅ 5个核心工具都能正常运行（已完成）
 2. **第二阶段验收**：具备完整友好的CLI使用体验
 3. **第三阶段验收**：至少实现1个AI智能增强功能
 4. **第四阶段验收**：能够作为MCP工具正常使用
@@ -592,14 +628,14 @@ def process_files(path: str) -> List[str]:
 ### 10.3 质量检查清单
 ```markdown
 ## 发布前检查清单
-- [ ] 所有工具都有完整的中文注释
-- [ ] 每个工具都有对应的测试用例
-- [ ] CLI帮助信息清晰明了
-- [ ] 错误信息友好且有指导性
-- [ ] README文档包含所有使用示例
-- [ ] 依赖版本已锁定（poetry.lock）
-- [ ] Logfire监控正常工作（已配置认证）
-- [ ] 在干净环境中测试安装流程
+- [x] 所有工具都有完整的中文注释
+- [x] 每个工具都有对应的测试用例
+- [x] CLI帮助信息清晰明了
+- [x] 错误信息友好且有指导性
+- [x] README文档包含所有使用示例
+- [x] 依赖版本已锁定（poetry.lock）
+- [x] Logfire监控正常工作（已配置认证）
+- [x] 在干净环境中测试安装流程
 ```
 
 ## 11. 长期维护策略
@@ -630,22 +666,53 @@ def process_files(path: str) -> List[str]:
 ## 12. CLI命令速查表
 
 ```bash
-# 已实现的命令
+# 已实现的命令（第一阶段 ✅）
 tools list PATH              # 列出目录文件
 tools list PATH --all        # 包含隐藏文件
 tools list PATH --long       # 显示详细信息
 
-# 计划实现的命令
 tools duplicates PATH        # 查找重复文件
+tools duplicates PATH -r     # 递归扫描子目录
+tools duplicates PATH -s 1024  # 指定最小文件大小
+
 tools rename PATTERN         # 批量重命名
-tools replace FILE           # 文本替换
+tools rename "old:new"       # 文本替换模式
+tools rename "prefix" -n     # 序号模式
+
+tools replace PATTERN        # 文本替换
+tools replace "old:new" -f file.txt  # 单文件替换
+tools replace "old:new" -p path      # 目录批量替换
+
 tools organize PATH          # 文件整理
+tools organize PATH --mode type   # 按类型整理
+tools organize PATH --mode date   # 按日期整理
 
 # 通用选项
 --help                       # 显示帮助信息
 --version                    # 显示版本号
 --verbose                    # 详细输出模式
 ```
+
+## 13. 第二阶段准备事项
+
+### 13.1 功能增强计划
+1. **进度显示**：为长时间操作添加进度条
+2. **输出格式**：支持JSON、CSV等多种输出格式
+3. **配置文件**：支持 .simple-tools.yml 配置文件
+4. **批处理**：支持从文件读取批量操作清单
+5. **撤销功能**：为关键操作提供撤销选项
+
+### 13.2 性能优化方向
+1. **并发处理**：对独立文件操作使用多进程
+2. **缓存机制**：对重复计算结果进行缓存
+3. **流式处理**：大文件采用流式读写
+4. **索引优化**：建立文件索引加速查找
+
+### 13.3 用户体验改进
+1. **交互模式**：提供交互式操作界面
+2. **自动补全**：支持命令和路径自动补全
+3. **历史记录**：记录操作历史便于重复执行
+4. **智能提示**：根据使用习惯提供建议
 
 ---
 
@@ -661,4 +728,4 @@ tools organize PATH          # 文件整理
 
 ---
 
-*本指南将随项目发展持续更新，最新版本请查看项目知识库。*
+*本指南将随项目发展持续更新，最新版本请查看项目文档。*

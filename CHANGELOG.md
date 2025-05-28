@@ -4,7 +4,7 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/) 规范。
 
-## [未发布]
+## [0.1.0] - 2025-05-28
 
 ### 新增
 - 初始化项目结构，使用 Poetry 管理依赖
@@ -24,9 +24,13 @@
 - Python 3.13.3+
 - Pydantic 2.11.5+
 - Logfire 3.16.0+
-- Click 8.1+ (CLI框架)
-- pytest 8.0+ (测试框架)
+- Click 8.2.1+ (CLI框架)
+- pytest 8.3.5+ (测试框架)
+- 代码质量工具：black, isort, ruff, mypy
 
-## [0.1.0] - 即将发布
-
-第一个正式版本，包含 5 个实用工具。
+### CLI 命令
+- `tools list PATH` - 列出目录文件
+- `tools duplicates PATH` - 查找重复文件
+- `tools rename PATTERN` - 批量重命名文件
+- `tools replace PATTERN` - 批量替换文本
+- `tools organize PATH` - 自动整理文件
