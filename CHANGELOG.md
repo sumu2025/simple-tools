@@ -17,7 +17,7 @@
   - `text_replace` - 文本批量替换工具
   - `file_organizer` - 文件自动整理工具
 - 集成 Logfire 监控系统
-- 添加完整的单元测试，覆盖率达到 70%+
+- 添加完整的单元测试，覆盖率达到 85%+
 - 配置 GitHub Actions CI/CD
 - 添加 pre-commit 钩子确保代码质量
 - 编写项目文档和 README

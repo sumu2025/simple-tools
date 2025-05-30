@@ -276,14 +276,23 @@ class FileOrganizerTool:
     help="整理模式",
 )
 @option("-r", "--recursive", is_flag=True, help="递归处理子目录")
+@option("--execute", is_flag=True, help="实际执行整理（非预览模式）")
 @option("-y", "--yes", is_flag=True, help="跳过确认提示")
 @pass_context
 def organize_cmd(
-    ctx: click.Context, path: str, mode: str, recursive: bool, yes: bool
+    ctx: click.Context,
+    path: str,
+    mode: str,
+    recursive: bool,
+    execute: bool,
+    yes: bool,
 ) -> None:
     """自动整理文件到分类目录.
 
     PATH: 要整理的目录路径（默认为当前目录）
+
+    --execute: 实际执行整理（非预览模式），默认仅预览（dry-run）。
+    -y/--yes: 跳过确认提示，仅影响是否跳过确认，不影响是否实际执行。
     """
     ctx.obj["config"]
 
@@ -291,7 +300,7 @@ def organize_cmd(
         path=path,
         mode=mode,
         recursive=recursive,
-        dry_run=not yes,  # 如果指定了-y，则关闭预览模式
+        dry_run=not execute,  # 仅当指定 --execute 时，dry_run 为 False
         skip_confirm=yes,
     )
 
@@ -321,9 +330,9 @@ def organize_cmd(
                 click.echo("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
                 click.echo(f"将移动 {pending_count} 个文件")
 
-                if not click.confirm("确认执行整理？"):
-                    click.echo("操作已取消。")
-                    return
+                # dry-run 模式下，无论用户是否确认，都只展示整理计划，不移动文件
+                click.echo("已展示整理计划（预览模式，未实际移动文件）。")
+                return
 
             if pending_count > 0:
                 click.echo("\n正在整理文件...")

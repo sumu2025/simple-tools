@@ -9,6 +9,8 @@ import logfire
 
 from simple_tools._typing import argument, command, option, pass_context  # 新增
 
+from ..utils.formatter import FileListData, OutputFormat, format_output
+
 
 def format_size(size_bytes: int) -> str:
     """将字节数转换为人类可读的文件大小格式.
@@ -116,12 +118,19 @@ def list_files(
         return items_info
 
 
+# 修改 list_cmd 函数，添加 format 参数，此部分为新增，未删除原内容
 @command()
 @argument("path", type=click.Path(exists=True), default=".")
 @option("-a", "--all", is_flag=True, help="显示隐藏文件（以.开头的文件）")
 @option("-l", "--long", is_flag=True, help="显示详细信息（文件大小、修改时间）")
+@option(
+    "--format",
+    type=click.Choice(["plain", "json", "csv"], case_sensitive=False),
+    default="plain",
+    help="输出格式（plain/json/csv）",
+)
 @pass_context
-def list_cmd(ctx: click.Context, path: str, all: bool, long: bool) -> None:
+def list_cmd(ctx: click.Context, path: str, all: bool, long: bool, format: str) -> None:
     """列出指定目录下的文件和文件夹.
 
     PATH: 要列出的目录路径（默认为当前目录）
@@ -131,35 +140,58 @@ def list_cmd(ctx: click.Context, path: str, all: bool, long: bool) -> None:
     try:
         items = list_files(path, show_hidden=all, show_details=long)
 
-        # 输出目录标题
-        click.echo(f"\n目录: {os.path.abspath(path)}")
-        click.echo("-" * 60)
+        # 根据格式选择输出方式
+        if format != "plain":
+            # 构建格式化数据
+            files_data = []
+            for item in items:
+                file_info = {
+                    "name": item["name"],
+                    "type": "directory" if item["is_dir"] else "file",
+                    "size": item.get("size", 0),
+                }
+                if long and "modified_formatted" in item:
+                    file_info["modified"] = item["modified_formatted"]
+                files_data.append(file_info)
 
-        # 如果目录为空
-        if not items:
-            click.echo("目录为空")
-            return
+            # 创建数据模型
+            data = FileListData(
+                path=os.path.abspath(path), total=len(items), files=files_data
+            )
 
-        # 输出文件列表
-        for item in items:
-            if item["is_dir"]:
-                type_indicator = "[目录]"
-                size_info = ""
-            else:
-                type_indicator = "[文件]"
-                size_info = f" ({item['size_formatted']})" if long else ""
+            # 格式化输出
+            output = format_output(data, OutputFormat(format))
+            click.echo(output)
+        else:
+            # 保持原有的纯文本输出方式
+            click.echo(f"\n目录: {os.path.abspath(path)}")
+            click.echo("-" * 60)
 
-            if long and not item["is_dir"]:
-                # E501修复：分多行拼接
-                click.echo(
-                    f"{type_indicator:<6} {item['name']:<30} "
-                    f"{size_info:<10} {item['modified_formatted']}"
-                )
-            else:
-                click.echo(f"{type_indicator} {item['name']}{size_info}")
+            # 如果目录为空
+            if not items:
+                click.echo("目录为空")
+                return
 
-        # 输出统计信息
-        click.echo(f"\n总计: {len(items)} 个项目")
+            # 输出文件列表
+            for item in items:
+                if item["is_dir"]:
+                    type_indicator = "[目录]"
+                    size_info = ""
+                else:
+                    type_indicator = "[文件]"
+                    size_info = f" ({item['size_formatted']})" if long else ""
+
+                if long and not item["is_dir"]:
+                    # E501修复：分多行拼接
+                    click.echo(
+                        f"{type_indicator:<6} {item['name']:<30} "
+                        f"{size_info:<10} {item['modified_formatted']}"
+                    )
+                else:
+                    click.echo(f"{type_indicator} {item['name']}{size_info}")
+
+            # 输出统计信息
+            click.echo(f"\n总计: {len(items)} 个项目")
 
     except click.ClickException as e:
         click.echo(str(e), err=True)

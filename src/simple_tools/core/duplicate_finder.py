@@ -10,7 +10,10 @@ import click
 import logfire
 from pydantic import BaseModel, Field
 
-from simple_tools._typing import argument, command, option, pass_context  # 新增
+from simple_tools._typing import argument, command, option, pass_context
+
+from ..utils.formatter import DuplicateData, OutputFormat, format_output
+from ..utils.progress import process_with_progress
 
 
 class DuplicateConfig(BaseModel):
@@ -141,66 +144,104 @@ class DuplicateFinder:
 
             # 第一步：扫描所有文件
             all_files = self._scan_files()
-
             if not all_files:
                 logfire.info("没有找到符合条件的文件")
                 return []
 
-            # 第二步：按文件大小分组（性能优化）
-            size_groups = defaultdict(list)
-            for file_info in all_files:
-                size_groups[file_info.size].append(file_info)
-
+            # 第二步：按文件大小分组
+            size_groups = self._group_files_by_size(all_files)
             # 过滤掉只有一个文件的大小组
             potential_duplicates = {
                 size: files for size, files in size_groups.items() if len(files) > 1
             }
-
             logfire.info(
                 f"按大小分组后，{len(potential_duplicates)} 个大小组可能包含重复文件"
             )
 
-            # 第三步：对相同大小的文件计算哈希值
-            duplicate_groups = []
+            # 第三步：组装哈希任务
+            all_files_to_hash = self._collect_files_to_hash(potential_duplicates)
+            logfire.info(f"需要计算 {len(all_files_to_hash)} 个文件的哈希值")
 
-            for file_size, files in potential_duplicates.items():
-                # 计算每个文件的哈希值
-                hash_groups = defaultdict(list)
+            # 第四步：批量计算哈希并分组
+            size_hash_groups = self._group_files_by_hash(all_files_to_hash)
 
-                for file_info in files:
-                    try:
-                        # 计算文件哈希值
-                        file_hash = self._calculate_file_hash(file_info.path)
-                        file_info.hash = file_hash
-                        hash_groups[file_hash].append(file_info)
-
-                    except Exception as e:
-                        logfire.warning(f"跳过文件 {file_info.path}: {str(e)}")
-                        continue
-
-                # 找出真正的重复文件组（相同哈希值的文件）
-                for file_hash, duplicate_files in hash_groups.items():
-                    if len(duplicate_files) > 1:
-                        # 计算可节省的空间（保留一个文件，删除其余）
-                        potential_save = file_size * (len(duplicate_files) - 1)
-
-                        # 创建重复文件组
-                        duplicate_group = DuplicateGroup(
-                            hash=file_hash,
-                            size=file_size,
-                            count=len(duplicate_files),
-                            files=[f.path for f in duplicate_files],
-                            potential_save=potential_save,
-                        )
-
-                        duplicate_groups.append(duplicate_group)
+            # 第五步：组装最终重复组
+            duplicate_groups = self._assemble_duplicate_groups(size_hash_groups)
 
             # 按可节省空间排序（从大到小）
             duplicate_groups.sort(key=lambda x: x.potential_save, reverse=True)
-
             logfire.info(f"检测完成，发现 {len(duplicate_groups)} 组重复文件")
-
             return duplicate_groups
+
+    def _group_files_by_size(
+        self, all_files: list["FileInfo"]
+    ) -> dict[int, list["FileInfo"]]:
+        """按文件大小分组."""
+        groups = defaultdict(list)
+        for file_info in all_files:
+            groups[file_info.size].append(file_info)
+        return groups
+
+    def _collect_files_to_hash(
+        self, potential_duplicates: dict[int, list["FileInfo"]]
+    ) -> list[tuple[int, "FileInfo"]]:
+        """组装需要计算哈希的文件列表."""
+        all_files_to_hash = []
+        for file_size, files in potential_duplicates.items():
+            all_files_to_hash.extend([(file_size, file_info) for file_info in files])
+        return all_files_to_hash
+
+    def _group_files_by_hash(
+        self, all_files_to_hash: list[tuple[int, FileInfo]]
+    ) -> dict[int, dict[str, list[FileInfo]]]:
+        """批量计算哈希并按大小和哈希分组."""
+
+        def calculate_hash_for_file(
+            file_data: tuple[int, FileInfo],
+        ) -> Optional[tuple[int, FileInfo, str]]:
+            file_size, file_info = file_data
+            try:
+                file_hash = self._calculate_file_hash(file_info.path)
+                file_info.hash = file_hash
+                return (file_size, file_info, file_hash)
+            except Exception as e:
+                logfire.warning(f"跳过文件 {file_info.path}: {str(e)}")
+                return None
+
+        size_hash_groups: dict[int, dict[str, list[FileInfo]]] = defaultdict(
+            lambda: defaultdict(list)
+        )
+        results = process_with_progress(
+            all_files_to_hash,
+            calculate_hash_for_file,
+            label="计算文件哈希值",
+            threshold=100,
+        )
+        for result in results:
+            if result is not None:
+                file_size, file_info, file_hash = result
+                size_hash_groups[file_size][file_hash].append(file_info)
+        # 转为常规 dict 返回，保证类型一致
+        return {size: dict(hash_group) for size, hash_group in size_hash_groups.items()}
+
+    def _assemble_duplicate_groups(
+        self, size_hash_groups: dict[int, dict[str, list["FileInfo"]]]
+    ) -> list["DuplicateGroup"]:
+        """组装最终的重复文件组."""
+        duplicate_groups = []
+        for file_size, hash_groups in size_hash_groups.items():
+            for file_hash, duplicate_files in hash_groups.items():
+                if len(duplicate_files) > 1:
+                    potential_save = file_size * (len(duplicate_files) - 1)
+                    duplicate_group = DuplicateGroup(
+                        hash=file_hash,
+                        size=file_size,
+                        count=len(duplicate_files),
+                        files=[f.path for f in duplicate_files],
+                        potential_save=potential_save,
+                    )
+                    duplicate_groups.append(duplicate_group)
+        return duplicate_groups
 
 
 def format_size(size_bytes: int) -> str:
@@ -290,6 +331,7 @@ def display_duplicate_results(
         click.echo("\n⚠️  警告：删除文件前请确认重要性，建议先备份！")
 
 
+# 修改 duplicates_cmd 函数，添加 format 参数
 @command()
 @argument("path", type=click.Path(exists=True), default=".")
 @option(
@@ -304,6 +346,12 @@ def display_duplicate_results(
     help="指定文件扩展名（可多次使用），如：-e .jpg -e .png",
 )
 @option("--show-commands", is_flag=True, help="显示删除重复文件的建议命令")
+@option(
+    "--format",
+    type=click.Choice(["plain", "json", "csv"], case_sensitive=False),
+    default="plain",
+    help="输出格式（plain/json/csv）",
+)
 @pass_context
 def duplicates_cmd(
     ctx: click.Context,
@@ -313,6 +361,7 @@ def duplicates_cmd(
     min_size: int,
     extension: tuple[str, ...],
     show_commands: bool,
+    format: str,
 ) -> None:
     """查找指定目录中的重复文件.
 
@@ -324,6 +373,7 @@ def duplicates_cmd(
       tools duplicates . -s 1048576        # 只查找大于1MB的文件
       tools duplicates . -e .jpg -e .png   # 只查找图片文件
       tools duplicates . --show-commands   # 显示删除建议
+      tools duplicates . --format json     # JSON格式输出
     """
     # 处理递归选项冲突
     if no_recursive:
@@ -341,8 +391,9 @@ def duplicates_cmd(
         # 创建检测器并执行检测
         finder = DuplicateFinder(config)
 
-        # 显示开始信息
-        click.echo("🔍 开始扫描重复文件...")
+        # 显示开始信息（仅在plain格式时显示）
+        if format == "plain":
+            click.echo("🔍 开始扫描重复文件...")
 
         # 执行检测
         duplicate_groups = finder.find_duplicates()
@@ -351,14 +402,42 @@ def duplicates_cmd(
         all_files = finder._scan_files()
         total_files = len(all_files)
 
-        # 显示结果
-        display_duplicate_results(
-            duplicate_groups=duplicate_groups,
-            scan_path=os.path.abspath(path),
-            total_files=total_files,
-            recursive=recursive,
-            show_commands=show_commands,
-        )
+        # 根据格式选择输出方式
+        if format != "plain":
+            # 计算总的节省空间
+            total_save_space = sum(group.potential_save for group in duplicate_groups)
+
+            # 构建格式化数据
+            groups_data = []
+            for group in duplicate_groups:
+                groups_data.append(
+                    {
+                        "hash": group.hash,
+                        "size": group.size,
+                        "count": group.count,
+                        "files": [str(f) for f in group.files],
+                    }
+                )
+
+            # 创建数据模型
+            data = DuplicateData(
+                total_groups=len(duplicate_groups),
+                total_size_saved=total_save_space,
+                groups=groups_data,
+            )
+
+            # 格式化输出
+            output = format_output(data, OutputFormat(format))
+            click.echo(output)
+        else:
+            # 保持原有的纯文本输出方式
+            display_duplicate_results(
+                duplicate_groups=duplicate_groups,
+                scan_path=os.path.abspath(path),
+                total_files=total_files,
+                recursive=recursive,
+                show_commands=show_commands,
+            )
 
     except click.ClickException:
         # Click异常直接传播
