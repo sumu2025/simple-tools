@@ -17,7 +17,11 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
     "Topic :: Utilities"
 ]
-packages = [{ include = "src" }]
+
+[tool.poetry.packages]
+include = "src"
+from = "."
+
 [tool.poetry.dependencies]
 python   = "^3.13.3"            # 项目基于 3.13.3；^ 允许 3.x 后续 patch
 click    = "^8.2.1"             # 8.2.1 为 8.x 最新，支持 3.13
