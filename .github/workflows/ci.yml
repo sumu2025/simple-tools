@@ -45,6 +45,9 @@ jobs:
       - name: 📥 Install deps
         run: poetry install --no-interaction --no-ansi
 
+      - name: Set PYTHONPATH for src layout
+        run: echo "PYTHONPATH=$(pwd)/src" >> $GITHUB_ENV
+
       # ---------- 运行各项检查 ----------
       - name: Ruff lint
         run: poetry run ruff check src tests
@@ -56,7 +59,6 @@ jobs:
         run: poetry run isort --check-only src tests
 
       - name: mypy (strict)
-        # 限定源码目录，防止 duplicate-module 误判
         run: poetry run mypy --strict src/simple_tools
 
 # ======================================================
@@ -97,16 +99,22 @@ jobs:
       - name: 📥 Install deps
         run: poetry install --no-interaction --no-ansi
 
+      - name: Set PYTHONPATH for src layout
+        run: echo "PYTHONPATH=$(pwd)/src" >> $GITHUB_ENV
+
+      - name: Print sys.path
+        run: python -c "import sys; print(sys.path)"
+
       - name: 🧪 Run pytest (+coverage)
         run: poetry run pytest -v
 
       - name: 📊 Generate coverage (xml + term)
         run: |
           poetry run pytest \
-            --cov=src/simple_tools \
-            --cov-report=xml \
-            --cov-report=term-missing \
-            --cov-fail-under=70
+              --cov=./src/simple_tools \
+              --cov-report=xml \
+              --cov-report=term-missing \
+              --cov-fail-under=70
 
       - name: ☁️ Upload coverage artifact
         if: always()
@@ -135,6 +143,12 @@ jobs:
       - uses: snok/install-poetry@v1
         with:
           version: "2.1.3"
+
+      - name: 📥 Install deps
+        run: poetry install --no-interaction --no-ansi
+
+      - name: Set PYTHONPATH for src layout
+        run: echo "PYTHONPATH=$(pwd)/src" >> $GITHUB_ENV
 
       - name: Build wheel / sdist
         run: poetry build
