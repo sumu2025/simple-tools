@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "sumu-simple-tools"         # 用新包名
-version = "0.1.0"
+version = "0.2.0-alpha.0"
 description = "一个简单实用的Python工具集，专注解决日常工作中的实际问题"
 authors = ["peacock <weipeacock@gmail.com>"]
 license = "MIT"
