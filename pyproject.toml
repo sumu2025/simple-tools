@@ -19,9 +19,8 @@ classifiers = [
 ]
 
 [tool.poetry.packages]
-packages = [
-  { include = "src", from = "." }
-]
+include = "simple_tools"
+from = "src"
 
 [tool.poetry.dependencies]
 python   = "^3.13.3"            # 项目基于 3.13.3；^ 允许 3.x 后续 patch
