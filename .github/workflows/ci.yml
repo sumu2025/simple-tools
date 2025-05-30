@@ -103,11 +103,12 @@ jobs:
         run: python -c "import sys; print(sys.path)"
 
       - name: 🧪 Run pytest (+coverage)
-        run: poetry run pytest \
-          --cov=src/simple_tools \
-          --cov-report=xml \
-          --cov-report=term-missing \
-          --cov-fail-under=70
+                run: poetry run pytest
+                --cov=./src/simple_tools
+                --cov-report=xml
+                --cov-report=term-missing
+                --cov-fail-under=70
+
 
       - name: ☁️ Upload coverage artifact
         if: always()
