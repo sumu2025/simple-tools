@@ -97,16 +97,17 @@ jobs:
       - name: 📥 Install deps
         run: poetry install --no-interaction --no-ansi
 
-      - name: 🧪 Run pytest (+coverage)
-        run: poetry run pytest -v
+      - name: Print sys.path
+        # 我们添加了这个新的步骤，用于打印 Python 的 sys.path 列表。
+        # 这可以帮助我们了解 Python 解释器在 CI 环境中是如何查找模块的。
+        run: python -c "import sys; print(sys.path)"
 
-      - name: 📊 Generate coverage (xml + term)
-        run: |
-          poetry run pytest \
-            --cov=src/simple_tools \
-            --cov-report=xml \
-            --cov-report=term-missing \
-            --cov-fail-under=70
+      - name: 🧪 Run pytest (+coverage)
+        run: poetry run pytest \
+          --cov=src/simple_tools \
+          --cov-report=xml \
+          --cov-report=term-missing \
+          --cov-fail-under=70
 
       - name: ☁️ Upload coverage artifact
         if: always()
