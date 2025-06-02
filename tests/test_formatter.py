@@ -6,10 +6,10 @@ from io import StringIO
 
 import pytest
 
+from simple_tools._typing import OutputFormat
 from simple_tools.utils.formatter import (
     DuplicateData,
     FileListData,
-    OutputFormat,
     format_output,
 )
 
@@ -147,15 +147,15 @@ class TestFormatter:
     def test_empty_data_handling(self) -> None:
         """测试空数据的处理."""
         # 空文件列表
-        data = FileListData(path="/", total=0, files=[])
-        result = format_output(data, OutputFormat.JSON)
+        file_data = FileListData(path="/", total=0, files=[])
+        result = format_output(file_data, OutputFormat.JSON)
         parsed = json.loads(result)
         assert parsed["total"] == 0
         assert parsed["files"] == []
 
         # 空重复文件
-        data = DuplicateData(total_groups=0, total_size_saved=0, groups=[])
-        result = format_output(data, OutputFormat.CSV)
+        duplicate_data = DuplicateData(total_groups=0, total_size_saved=0, groups=[])
+        result = format_output(duplicate_data, OutputFormat.CSV)
         lines = result.strip().split("\n")
         assert len(lines) == 1  # 只有标题行
 
@@ -286,4 +286,4 @@ class TestFormatter:
         # 应该只有标题行
         lines = result.strip().split("\n")
         assert len(lines) == 1
-        assert lines[0] == "name,size,type"
+        assert lines[0] == "name,type,size,modified"

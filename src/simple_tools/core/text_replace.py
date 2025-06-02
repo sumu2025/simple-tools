@@ -214,27 +214,56 @@ class TextReplaceTool:
             )
 
 
+# 修改 src/simple_tools/core/text_replace.py 的 replace_cmd 函数
+
+
 @command()
-@argument("pattern")
+@argument("pattern", required=True)
 @option("-f", "--file", type=click.Path(exists=True), help="指定单个文件")
-@option("-p", "--path", default=".", help="指定扫描目录")
-@option("-e", "--extension", multiple=True, help="文件扩展名过滤（可多次使用）")
-@option("--execute", is_flag=True, help="执行实际替换（默认为预览模式）")
+@option("-p", "--path", type=click.Path(exists=True), default=".", help="指定扫描目录")
+@option(
+    "-e",
+    "--extension",
+    multiple=True,
+    help="文件扩展名过滤（可多次使用）",
+)
+@option("-d", "--dry-run", is_flag=True, default=None, help="预览模式")
+@option("--execute", is_flag=True, help="执行模式（跳过预览）")
 @option("-y", "--yes", is_flag=True, help="跳过确认提示")
 @pass_context
 def replace_cmd(
     ctx: click.Context,
     pattern: str,
-    file: str,
+    file: Optional[str],
     path: str,
     extension: tuple[str, ...],
+    dry_run: Optional[bool],
     execute: bool,
     yes: bool,
 ) -> None:
-    """文本批量替换工具.
+    """在文件中批量替换文本."""
+    # 获取配置
+    config = ctx.obj.get("config")
 
-    PATTERN: 替换模式，格式为 "old:new"
-    """
+    # 应用配置文件的默认值
+    if config and config.replace:
+        # 文件扩展名
+        if not extension and config.replace.extensions:
+            extension = tuple(config.replace.extensions)
+        # 预览模式
+        if dry_run is None and not execute:
+            dry_run = config.replace.dry_run
+
+    # 设置默认值
+    if dry_run is None and not execute:
+        dry_run = True
+
+    # execute 参数覆盖 dry_run
+    if execute:
+        dry_run = False
+
+    # ... 其余代码保持不变 ...
+
     try:
         # 验证pattern格式
         if ":" not in pattern:

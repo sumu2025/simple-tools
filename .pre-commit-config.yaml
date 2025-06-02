@@ -8,7 +8,7 @@
 repos:
   # ----------------- 基础代码质量钩子 -----------------
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.6.0          # 2025-05 最新
+    rev: v5.0.0          # 2025-05 最新
     hooks:
       - id: trailing-whitespace         # 删除行尾空白
       - id: end-of-file-fixer           # 保证文件以换行结束
@@ -34,7 +34,7 @@ repos:
   # ----------------- Ruff Linter（含 Docstring 规则） -----------------
   - repo: https://github.com/astral-sh/ruff-pre-commit
     # 与 ruff 0.11.11 匹配的镜像标签，一般保持同步即可
-    rev: v0.11.11
+    rev: v0.11.12
     hooks:
       - id: ruff
         name: ruff (lint & fix --unsafe-fixes)
@@ -47,19 +47,15 @@ repos:
 
   # ----------------- mypy 静态类型检查 -----------------
   - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.15.0
+    rev: v1.16.0
     hooks:
       - id: mypy
         name: mypy (strict)
-        language_version: python3.13
-        additional_dependencies:
-          - "pydantic==2.11.5"
-          - "pydantic[mypy]"       # 安装官方 mypy 插件
+        language: system
+        entry: poetry run mypy
         args:
           - "--explicit-package-bases"
           - "--show-error-codes"
-
-
 
   # ----------------- 自定义项目约束脚本 -----------------
   # 例如检查“单个文件不超过 100 行”等，你可以在 scripts/ 下写脚本

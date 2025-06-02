@@ -82,6 +82,10 @@ class TestFileOrganizer:
 
             # 默认是预览模式
             result = self.runner.invoke(cli, ["organize", tmpdir])
+            # 临时加入
+            print(result.output)
+            print(result.exit_code)
+            # 临时加入
             assert result.exit_code == 0
             assert "整理计划" in result.output or "preview" in result.output.lower()
             # 文件应该还在原位置

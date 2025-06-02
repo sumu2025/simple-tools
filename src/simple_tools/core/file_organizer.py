@@ -265,50 +265,135 @@ class FileOrganizerTool:
         if skipped_count > 0:
             click.echo(f"\n⚠️  将跳过 {skipped_count} 个文件（目标位置已存在同名文件）")
 
+    def print_organize_result(self, result: OrganizeResult) -> None:
+        """打印整理结果."""
+        click.echo("\n整理完成：")
+        click.echo(f"  成功移动: {result.moved} 个文件")
+        if result.skipped > 0:
+            click.echo(f"  跳过: {result.skipped} 个文件")
+        if result.failed > 0:
+            click.echo(f"  失败: {result.failed} 个文件")
+
+        logfire.info(
+            "文件整理完成",
+            attributes={
+                "moved": result.moved,
+                "skipped": result.skipped,
+                "failed": result.failed,
+            },
+        )
+
+
+def _get_mode_desc(mode: str) -> str:
+    """获取模式描述."""
+    mode_map = {"type": "按文件类型", "date": "按修改日期", "mixed": "按类型和日期"}
+    return mode_map.get(mode, mode)
+
+
+def _prepare_organize_config(
+    ctx: click.Context,
+    path: str,
+    mode: Optional[str],
+    recursive: Optional[bool],
+    dry_run: Optional[bool],
+    execute: bool,
+    yes: bool,
+) -> OrganizeConfig:
+    """准备文件整理配置."""
+    # 获取配置
+    config = ctx.obj.get("config")
+
+    # 应用配置文件的默认值
+    if config and config.organize:
+        # 整理模式
+        if mode is None:
+            mode = config.organize.mode
+        # 递归选项
+        if recursive is None:
+            recursive = config.organize.recursive
+        # 预览模式
+        if dry_run is None and not execute:
+            dry_run = config.organize.dry_run
+
+    # 设置默认值
+    if mode is None:
+        mode = "type"
+    if recursive is None:
+        recursive = False
+    if dry_run is None and not execute:
+        dry_run = True
+
+    # execute 参数覆盖 dry_run
+    if execute:
+        dry_run = False
+
+    return OrganizeConfig(
+        path=path,
+        mode=mode,
+        recursive=recursive,
+        dry_run=dry_run,
+        skip_confirm=yes,
+    )
+
+
+def _process_organize_plan(
+    organizer: FileOrganizerTool, items: list[OrganizeItem], dry_run: bool
+) -> Optional[OrganizeResult]:
+    """处理整理计划."""
+    pending_count = len([i for i in items if i.status == "pending"])
+
+    if dry_run and pending_count > 0:
+        click.echo("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        click.echo(f"将移动 {pending_count} 个文件")
+        click.echo("已展示整理计划（预览模式，未实际移动文件）。")
+        return None
+
+    if pending_count > 0:
+        click.echo("\n正在整理文件...")
+        return organizer.execute_organize(items)
+    else:
+        click.echo("没有文件需要移动。")
+        return None
+
 
 @command()
 @argument("path", type=click.Path(exists=True), default=".")
 @option(
-    "-m",
     "--mode",
-    type=click.Choice(["type", "date", "mixed"]),
-    default="type",
-    help="整理模式",
+    type=click.Choice(["type", "date", "mixed"], case_sensitive=False),
+    default=None,
+    help="整理模式：type(按类型)、date(按日期)、mixed(混合)",
 )
-@option("-r", "--recursive", is_flag=True, help="递归处理子目录")
-@option("--execute", is_flag=True, help="实际执行整理（非预览模式）")
+@option("-r", "--recursive", is_flag=True, default=None, help="递归处理子目录")
+@option("-d", "--dry-run", is_flag=True, default=None, help="预览模式")
+@option("--execute", is_flag=True, help="执行模式（跳过预览）")
 @option("-y", "--yes", is_flag=True, help="跳过确认提示")
 @pass_context
 def organize_cmd(
     ctx: click.Context,
     path: str,
-    mode: str,
-    recursive: bool,
+    mode: Optional[str],
+    recursive: Optional[bool],
+    dry_run: Optional[bool],
     execute: bool,
     yes: bool,
 ) -> None:
-    """自动整理文件到分类目录.
-
-    PATH: 要整理的目录路径（默认为当前目录）
-
-    --execute: 实际执行整理（非预览模式），默认仅预览（dry-run）。
-    -y/--yes: 跳过确认提示，仅影响是否跳过确认，不影响是否实际执行。
-    """
-    ctx.obj["config"]
-
-    organize_config = OrganizeConfig(
-        path=path,
-        mode=mode,
-        recursive=recursive,
-        dry_run=not execute,  # 仅当指定 --execute 时，dry_run 为 False
-        skip_confirm=yes,
-    )
-
+    """自动整理文件到相应目录."""
     try:
+        # 准备配置
+        organize_config = _prepare_organize_config(
+            ctx, path, mode, recursive, dry_run, execute, yes
+        )
+
         with logfire.span(
             "file_organize",
-            attributes={"path": path, "mode": mode, "recursive": recursive},
+            attributes={
+                "path": path,
+                "mode": organize_config.mode,
+                "recursive": organize_config.recursive,
+            },
         ):
+            # 创建整理工具并生成整理计划
             organizer = FileOrganizerTool(organize_config)
             items = organizer.create_organize_plan()
 
@@ -316,52 +401,25 @@ def organize_cmd(
                 click.echo("没有找到需要整理的文件。")
                 return
 
+            # 按类别统计文件
             category_stats: dict[str, list[Any]] = {}
             for item in items:
                 if item.category not in category_stats:
                     category_stats[item.category] = []
                 category_stats[item.category].append(item)
 
-            # 拆分打印逻辑，降低复杂度
-            organizer.print_scan_summary(path, mode, items, category_stats)
+            # 打印扫描摘要
+            organizer.print_scan_summary(
+                path, organize_config.mode, items, category_stats
+            )
 
-            pending_count = len([i for i in items if i.status == "pending"])
-            if organize_config.dry_run and pending_count > 0:
-                click.echo("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-                click.echo(f"将移动 {pending_count} 个文件")
+            # 处理整理计划
+            result = _process_organize_plan(organizer, items, organize_config.dry_run)
 
-                # dry-run 模式下，无论用户是否确认，都只展示整理计划，不移动文件
-                click.echo("已展示整理计划（预览模式，未实际移动文件）。")
-                return
-
-            if pending_count > 0:
-                click.echo("\n正在整理文件...")
-                result = organizer.execute_organize(items)
-
-                click.echo("\n整理完成：")
-                click.echo(f"  成功移动: {result.moved} 个文件")
-                if result.skipped > 0:
-                    click.echo(f"  跳过: {result.skipped} 个文件")
-                if result.failed > 0:
-                    click.echo(f"  失败: {result.failed} 个文件")
-
-                logfire.info(
-                    "文件整理完成",
-                    attributes={
-                        "moved": result.moved,
-                        "skipped": result.skipped,
-                        "failed": result.failed,
-                    },
-                )
-            else:
-                click.echo("没有文件需要移动。")
+            # 如果有结果，打印整理结果
+            if result:
+                organizer.print_organize_result(result)
 
     except Exception as e:
         logfire.error(f"文件整理失败: {str(e)}")
         raise click.ClickException(f"错误：{str(e)}")
-
-
-def _get_mode_desc(mode: str) -> str:
-    """获取模式描述."""
-    mode_map = {"type": "按文件类型", "date": "按修改日期", "mixed": "按类型和日期"}
-    return mode_map.get(mode, mode)

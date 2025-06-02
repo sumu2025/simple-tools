@@ -13,6 +13,8 @@ from simple_tools.core.duplicate_finder import (
     format_size,
 )
 
+from .test_helpers import create_mock_context
+
 
 class TestDataModels:
     """测试数据模型。."""
@@ -266,7 +268,7 @@ class TestCLICommand:
         (temp_dir / "file2.txt").write_text(content)
 
         # 创建模拟的配置对象
-        mock_ctx = {"config": type("Config", (), {"verbose": False})()}
+        mock_ctx = create_mock_context()
 
         # 运行命令
         result = cli_runner.invoke(duplicates_cmd, [str(temp_dir)], obj=mock_ctx)
@@ -285,7 +287,7 @@ class TestCLICommand:
         (temp_dir / "file1.txt").write_text("Content 1")
         (temp_dir / "file2.txt").write_text("Content 2")
 
-        mock_ctx = {"config": type("Config", (), {"verbose": False})()}
+        mock_ctx = create_mock_context()
 
         result = cli_runner.invoke(duplicates_cmd, [str(temp_dir)], obj=mock_ctx)
 
@@ -303,7 +305,7 @@ class TestCLICommand:
         (temp_dir / "file3.jpg").write_text(content)
         (temp_dir / "file4.jpg").write_text(content)
 
-        mock_ctx = {"config": type("Config", (), {"verbose": False})()}
+        mock_ctx = create_mock_context()
 
         # 测试扩展名过滤
         result = cli_runner.invoke(
@@ -324,7 +326,7 @@ class TestCLICommand:
         (temp_dir / "dup1.txt").write_text(content)
         (temp_dir / "dup2.txt").write_text(content)
 
-        mock_ctx = {"config": type("Config", (), {"verbose": False})()}
+        mock_ctx = create_mock_context()
 
         result = cli_runner.invoke(
             duplicates_cmd, [str(temp_dir), "--show-commands"], obj=mock_ctx
@@ -348,7 +350,7 @@ class TestCLICommand:
         (temp_dir / "file2.txt").write_text(content)
         (subdir / "file3.txt").write_text(content)
 
-        mock_ctx = {"config": type("Config", (), {"verbose": False})()}
+        mock_ctx = create_mock_context()
 
         # 使用 -n 选项（非递归）
         result = cli_runner.invoke(duplicates_cmd, [str(temp_dir), "-n"], obj=mock_ctx)
@@ -364,7 +366,7 @@ class TestCLICommand:
         (temp_dir / "small1.txt").write_text("A")
         (temp_dir / "small2.txt").write_text("A")
 
-        mock_ctx = {"config": type("Config", (), {"verbose": False})()}
+        mock_ctx = create_mock_context()
 
         # 设置最小大小为1MB
         result = cli_runner.invoke(

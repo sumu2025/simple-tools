@@ -11,7 +11,7 @@ import logfire
 import pytest
 
 
-@pytest.fixture(scope="session", autouse=True)  # type: ignore[misc]
+@pytest.fixture(scope="session", autouse=True)
 def configure_test_environment() -> Generator[None, None, None]:
     """自动配置测试环境."""
     os.environ["SIMPLE_TOOLS_TEST_MODE"] = "true"
@@ -31,7 +31,7 @@ def configure_test_environment() -> Generator[None, None, None]:
         del os.environ["SIMPLE_TOOLS_TEST_MODE"]
 
 
-@pytest.fixture  # type: ignore[misc]
+@pytest.fixture
 def temp_dir() -> Generator[Path, None, None]:
     """创建临时目录 fixture."""
     temp_path = Path(tempfile.mkdtemp())
@@ -40,7 +40,7 @@ def temp_dir() -> Generator[Path, None, None]:
         shutil.rmtree(temp_path)
 
 
-@pytest.fixture  # type: ignore[misc]
+@pytest.fixture
 def sample_text_files(temp_dir: Path) -> dict[str, Path]:
     """创建样本文本文件的 fixture."""
     files = {
@@ -58,7 +58,7 @@ def sample_text_files(temp_dir: Path) -> dict[str, Path]:
     return created_files
 
 
-@pytest.fixture  # type: ignore[misc]
+@pytest.fixture
 def sample_binary_files(temp_dir: Path) -> dict[str, Path]:
     """创建样本二进制文件的 fixture."""
     files: dict[str, Path] = {}
@@ -71,19 +71,19 @@ def sample_binary_files(temp_dir: Path) -> dict[str, Path]:
     return files
 
 
-@pytest.fixture  # type: ignore[misc]
+@pytest.fixture
 def mock_config() -> Any:
     """模拟配置对象的 fixture."""
     from simple_tools.config import get_config
 
     config = get_config()
     config.verbose = False
-    if not hasattr(config, "test_mode"):
-        config.test_mode = True
+    # 动态添加测试模式属性
+    setattr(config, "test_mode", True)
     return config
 
 
-@pytest.fixture  # type: ignore[misc]
+@pytest.fixture
 def duplicate_files(temp_dir: Path) -> dict[str, Path]:
     """创建包含重复文件的测试环境."""
     content = "This is duplicate content\nLine 2\nLine 3\n"
@@ -103,7 +103,7 @@ def duplicate_files(temp_dir: Path) -> dict[str, Path]:
     return created_files
 
 
-@pytest.fixture  # type: ignore[misc]
+@pytest.fixture
 def rename_test_files(temp_dir: Path) -> list[Path]:
     """创建用于重命名测试的文件."""
     files = [
@@ -145,14 +145,14 @@ def pytest_collection_modifyitems(config: Any, items: list[Any]) -> None:
             item.add_marker(pytest.mark.slow)
 
 
-@pytest.fixture(autouse=True)  # type: ignore[misc]
+@pytest.fixture(autouse=True)
 def reset_logfire_state() -> Generator[None, None, None]:
     """每个测试前重置logfire状态."""
     yield
     pass
 
 
-@pytest.fixture  # type: ignore[misc]
+@pytest.fixture
 def cli_runner() -> Any:
     """提供Click CLI测试运行器."""
     from click.testing import CliRunner
@@ -160,7 +160,7 @@ def cli_runner() -> Any:
     return CliRunner()
 
 
-@pytest.fixture  # type: ignore[misc]
+@pytest.fixture
 def capture_output(capsys: Any) -> Callable[[], tuple[str, str]]:
     """捕获标准输出和错误输出的便利fixture."""
 

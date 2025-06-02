@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "sumu-simple-tools"         # 用新包名
-version = "0.2.0a3"
+version = "0.2.0a5"
 description = "一个简单实用的Python工具集，专注解决日常工作中的实际问题"
 authors = ["peacock <weipeacock@gmail.com>"]
 license = "MIT"
@@ -34,6 +34,7 @@ isort       = "^6.0.1"         # 最新 6.x，兼容 black
 ruff        = "^0.11.11"          # 0.11 系列最新，速度快、规则多
 mypy        = "^1.15.0"         # 1.15.0 首次官方支持 Python 3.13
 types-click = "^7.1.8"          # click 的类型存根，消除 stub 警告
+types-pyyaml = "^6.0.12.20250516"
 
 [tool.poetry.scripts]
 tools = "simple_tools.cli:cli"

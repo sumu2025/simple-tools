@@ -101,15 +101,12 @@ jobs:
 
       - name: Set PYTHONPATH for src layout
         run: echo "PYTHONPATH=$(pwd)/src" >> $GITHUB_ENV
-<<<<<<< HEAD
-=======
 
       - name: Print sys.path
         run: python -c "import sys; print(sys.path)"
 
       - name: 🧪 Run pytest (+coverage)
         run: poetry run pytest -v
->>>>>>> main
 
       - name: Print sys.path
         run: python -c "import sys; print(sys.path)"

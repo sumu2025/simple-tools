@@ -298,12 +298,16 @@ class BatchRenameTool:
             return self.execute_rename(items)
 
 
+# 修改 src/simple_tools/core/batch_rename.py 的 rename_cmd 函数
+
+
 @command()
 @argument("pattern", required=True)
-@option("-p", "--path", type=click.Path(exists=True), default=".", help="目标目录路径")
-@option("-f", "--filter", default="*", help="文件过滤模式，如 '*.jpg'")
-@option("-n", "--number", is_flag=True, help="序号模式：为文件添加数字序号")
-@option("--execute", is_flag=True, help="直接执行，跳过预览")
+@option("-p", "--path", type=click.Path(exists=True), default=".", help="目标目录")
+@option("-f", "--filter", default="*", help="文件过滤模式")
+@option("-n", "--number", is_flag=True, help="序号模式")
+@option("-d", "--dry-run", is_flag=True, default=None, help="预览模式")
+@option("--execute", is_flag=True, help="执行模式（跳过预览）")
 @option("-y", "--yes", is_flag=True, help="跳过确认提示")
 @pass_context
 def rename_cmd(
@@ -312,6 +316,7 @@ def rename_cmd(
     path: str,
     filter: str,
     number: bool,
+    dry_run: Optional[bool],
     execute: bool,
     yes: bool,
 ) -> None:
@@ -329,6 +334,27 @@ def rename_cmd(
       tools rename "old:new" -p ~/Documents   # 指定目录
       tools rename "draft:final" --execute    # 跳过预览直接执行
     """
+    # 获取配置
+    config = ctx.obj.get("config")
+
+    # 应用配置文件的默认值
+    if config and config.rename:
+        # 预览模式
+        if dry_run is None and not execute:
+            dry_run = config.rename.dry_run
+        # 跳过确认
+        if not yes:
+            yes = config.rename.skip_confirm
+
+    # 设置默认值
+    if dry_run is None and not execute:
+        dry_run = True
+
+    # execute 参数覆盖 dry_run
+    if execute:
+        dry_run = False
+
+    # ... 其余代码保持不变 ...
     try:
         # 创建配置对象
         config = RenameConfig(

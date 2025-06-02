@@ -1,0 +1,20 @@
+tools:
+  verbose: true          # 全局详细输出
+  format: plain         # 全局输出格式（改回默认的plain）
+
+  list:
+    show_all: true      # 默认显示隐藏文件
+    long: true          # 默认显示详细信息
+
+  duplicates:
+    recursive: true     # 默认递归扫描
+    min_size: 1         # 默认最小文件大小（改为1字节）
+
+  rename:
+    dry_run: false      # 默认直接执行
+
+  replace:
+    extensions: [.txt, .md]  # 默认只处理这些文件类型
+
+  organize:
+    mode: type          # 默认按类型整理

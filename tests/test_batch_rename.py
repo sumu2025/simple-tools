@@ -14,6 +14,8 @@ from simple_tools.core.batch_rename import (
     rename_cmd,
 )
 
+from .test_helpers import create_mock_context
+
 
 class TestDataModels:
     """测试数据模型."""
@@ -187,7 +189,7 @@ class TestBatchRenameTool:
         items = tool._check_conflicts_and_changes([item])
 
         assert items[0].status == "skipped"
-        assert "不包含要替换的文本" in items[0].error
+        assert items[0].error is not None and "不包含要替换的文本" in items[0].error
 
     def test_check_conflicts_file_exists(self, temp_dir: Path) -> None:
         """测试目标文件已存在的冲突检查."""
@@ -204,7 +206,7 @@ class TestBatchRenameTool:
         items = tool._check_conflicts_and_changes([item])
 
         assert items[0].status == "skipped"
-        assert "目标文件已存在" in items[0].error
+        assert items[0].error is not None and "目标文件已存在" in items[0].error
 
     def test_execute_rename_success(self, temp_dir: Path) -> None:
         """测试成功执行重命名."""
@@ -320,7 +322,10 @@ class TestCLICommand:
         (temp_dir / "old_file.txt").write_text("content")
 
         # 运行命令（预览模式）
-        result = cli_runner.invoke(rename_cmd, ["old:new", "-p", str(temp_dir)])
+        mock_ctx = create_mock_context()
+        result = cli_runner.invoke(
+            rename_cmd, ["old:new", "-p", str(temp_dir)], obj=mock_ctx
+        )
 
         assert result.exit_code == 0
         assert "扫描目录:" in result.output
@@ -339,7 +344,10 @@ class TestCLICommand:
         (temp_dir / "img2.jpg").write_text("image2")
 
         # 使用序号模式
-        result = cli_runner.invoke(rename_cmd, ["photo", "-p", str(temp_dir), "-n"])
+        mock_ctx = create_mock_context()
+        result = cli_runner.invoke(
+            rename_cmd, ["photo", "-p", str(temp_dir), "-n"], obj=mock_ctx
+        )
 
         assert result.exit_code == 0
         assert "photo_001.jpg" in result.output
@@ -356,8 +364,9 @@ class TestCLICommand:
         (temp_dir / "old_image.jpg").write_text("image")
 
         # 只处理txt文件
+        mock_ctx = create_mock_context()
         result = cli_runner.invoke(
-            rename_cmd, ["old:new", "-p", str(temp_dir), "-f", "*.txt"]
+            rename_cmd, ["old:new", "-p", str(temp_dir), "-f", "*.txt"], obj=mock_ctx
         )
 
         assert result.exit_code == 0
@@ -372,8 +381,9 @@ class TestCLICommand:
         (temp_dir / "old_file.txt").write_text("content")
 
         # 使用 --execute 选项（不需要确认）
+        mock_ctx = create_mock_context()
         result = cli_runner.invoke(
-            rename_cmd, ["old:new", "-p", str(temp_dir), "--execute"]
+            rename_cmd, ["old:new", "-p", str(temp_dir), "--execute"], obj=mock_ctx
         )
 
         assert result.exit_code == 0
@@ -390,7 +400,10 @@ class TestCLICommand:
         (temp_dir / "old_file.txt").write_text("content")
 
         # 使用 -y 选项跳过确认
-        result = cli_runner.invoke(rename_cmd, ["old:new", "-p", str(temp_dir), "-y"])
+        mock_ctx = create_mock_context()
+        result = cli_runner.invoke(
+            rename_cmd, ["old:new", "-p", str(temp_dir), "-y"], obj=mock_ctx
+        )
 
         assert result.exit_code == 0
         assert "确认执行重命名？" not in result.output
@@ -402,8 +415,9 @@ class TestCLICommand:
         (temp_dir / "file.txt").write_text("content")
 
         # 使用不会匹配的过滤器
+        mock_ctx = create_mock_context()
         result = cli_runner.invoke(
-            rename_cmd, ["old:new", "-p", str(temp_dir), "-f", "*.jpg"]
+            rename_cmd, ["old:new", "-p", str(temp_dir), "-f", "*.jpg"], obj=mock_ctx
         )
 
         assert result.exit_code == 0
@@ -412,7 +426,8 @@ class TestCLICommand:
     def test_rename_command_invalid_pattern(self, cli_runner: Any) -> None:
         """测试无效的重命名模式."""
         # 文本模式下没有使用冒号分隔
-        result = cli_runner.invoke(rename_cmd, ["invalid_pattern"])
+        mock_ctx = create_mock_context()
+        result = cli_runner.invoke(rename_cmd, ["invalid_pattern"], obj=mock_ctx)
 
         assert result.exit_code != 0
         assert "错误" in result.output
@@ -424,7 +439,10 @@ class TestCLICommand:
         (temp_dir / "file2.txt").write_text("content")
 
         # 尝试替换不存在的文本
-        result = cli_runner.invoke(rename_cmd, ["old:new", "-p", str(temp_dir)])
+        mock_ctx = create_mock_context()
+        result = cli_runner.invoke(
+            rename_cmd, ["old:new", "-p", str(temp_dir)], obj=mock_ctx
+        )
 
         assert result.exit_code == 0
         assert "没有可以重命名的文件" in result.output
@@ -439,7 +457,10 @@ class TestCLICommand:
         (temp_dir / "old_file2.txt").write_text("content2")
         (temp_dir / "new_file.txt").write_text("other")  # 不包含"old"
 
-        result = cli_runner.invoke(rename_cmd, ["old:new", "-p", str(temp_dir)])
+        mock_ctx = create_mock_context()
+        result = cli_runner.invoke(
+            rename_cmd, ["old:new", "-p", str(temp_dir)], obj=mock_ctx
+        )
 
         assert result.exit_code == 0
         assert "成功: 2 个文件" in result.output
@@ -454,7 +475,10 @@ class TestCLICommand:
         (temp_dir / "old_file.txt").write_text("content")
 
         # 运行命令，用户选择取消
-        result = cli_runner.invoke(rename_cmd, ["old:new", "-p", str(temp_dir)])
+        mock_ctx = create_mock_context()
+        result = cli_runner.invoke(
+            rename_cmd, ["old:new", "-p", str(temp_dir)], obj=mock_ctx
+        )
 
         assert result.exit_code == 0
         assert "操作已取消" in result.output

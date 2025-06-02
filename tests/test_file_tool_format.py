@@ -49,11 +49,17 @@ class TestFileToolFormat:
             Path(tmpdir, "visible.txt").write_text("visible")
 
             # 不带 --all，不应该显示隐藏文件
-            result = self.runner.invoke(cli, ["list", tmpdir, "--format", "csv"])
-            assert ".hidden" not in result.output
+            result = self.runner.invoke(
+                cli, ["list", tmpdir, "--format", "csv", "--no-all"]
+            )
+            lines = result.output.splitlines()
+            filenames = [row.split(",")[0] for row in lines[1:] if row]
+            assert ".hidden" not in filenames
 
             # 带 --all，应该显示隐藏文件
             result = self.runner.invoke(
                 cli, ["list", tmpdir, "--all", "--format", "csv"]
             )
-            assert ".hidden" in result.output
+            lines = result.output.splitlines()
+            filenames = [row.split(",")[0] for row in lines[1:] if row]
+            assert ".hidden" in filenames

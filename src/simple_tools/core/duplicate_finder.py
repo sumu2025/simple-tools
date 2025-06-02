@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 
 from simple_tools._typing import argument, command, option, pass_context
 
-from ..utils.formatter import DuplicateData, OutputFormat, format_output
+from ..utils.formatter import DuplicateData, format_output
 from ..utils.progress import process_with_progress
 
 
@@ -331,14 +331,104 @@ def display_duplicate_results(
         click.echo("\n⚠️  警告：删除文件前请确认重要性，建议先备份！")
 
 
-# 修改 duplicates_cmd 函数，添加 format 参数
+def _prepare_duplicate_config(
+    ctx: click.Context,
+    path: str,
+    recursive: Optional[bool],
+    no_recursive: bool,
+    min_size: Optional[int],
+    extension: tuple[str, ...],
+) -> DuplicateConfig:
+    """准备重复文件检测配置.
+
+    从命令行参数和配置文件中获取配置，并处理默认值和冲突。
+    """
+    # 获取配置
+    config = ctx.obj.get("config")
+
+    # 应用配置文件的默认值（命令行参数优先）
+    if config and config.duplicates:
+        # 递归选项
+        if recursive is None and not no_recursive:
+            recursive = config.duplicates.recursive
+        # 最小文件大小
+        if min_size is None:
+            min_size = config.duplicates.min_size
+        # 文件扩展名
+        if not extension and config.duplicates.extensions:
+            extension = tuple(config.duplicates.extensions)
+
+    # 设置默认值
+    if recursive is None and not no_recursive:
+        recursive = True
+    if min_size is None:
+        min_size = 1
+
+    # 处理递归选项冲突
+    if no_recursive:
+        recursive = False
+
+    # 转换扩展名列表
+    extensions = list(extension) if extension else None
+
+    # 创建配置对象
+    return DuplicateConfig(
+        path=path, recursive=recursive, min_size=min_size, extensions=extensions
+    )
+
+
+def _execute_duplicate_finder(
+    finder: DuplicateFinder,
+) -> tuple[list[DuplicateGroup], list[FileInfo]]:
+    """执行重复文件检测.
+
+    返回检测结果和扫描的文件列表。
+    """
+    # 执行检测
+    duplicate_groups = finder.find_duplicates()
+
+    # 计算扫描的总文件数（用于统计显示）
+    all_files = finder._scan_files()
+
+    return duplicate_groups, all_files
+
+
+def _handle_formatted_output(
+    duplicate_groups: list[DuplicateGroup], format_type: str
+) -> None:
+    """处理格式化输出（JSON/CSV）."""
+    # 计算总的节省空间
+    total_save_space = sum(group.potential_save for group in duplicate_groups)
+
+    # 构建格式化数据
+    groups_data = []
+    for group in duplicate_groups:
+        groups_data.append(
+            {
+                "hash": group.hash,
+                "size": group.size,
+                "count": group.count,
+                "files": [str(f) for f in group.files],
+            }
+        )
+
+    # 创建数据模型
+    data = DuplicateData(
+        total_groups=len(duplicate_groups),
+        total_size_saved=total_save_space,
+        groups=groups_data,
+    )
+
+    # 格式化输出
+    output = format_output(data, format_type)
+    click.echo(output)
+
+
 @command()
 @argument("path", type=click.Path(exists=True), default=".")
-@option(
-    "-r", "--recursive", is_flag=True, default=True, help="递归扫描子目录（默认启用）"
-)
+@option("-r", "--recursive", is_flag=True, default=None, help="递归扫描子目录")
 @option("-n", "--no-recursive", is_flag=True, help="仅扫描顶层目录，不递归")
-@option("-s", "--min-size", type=int, default=1, help="最小文件大小（字节），默认1")
+@option("-s", "--min-size", type=int, default=None, help="最小文件大小（字节）")
 @option(
     "-e",
     "--extension",
@@ -349,19 +439,19 @@ def display_duplicate_results(
 @option(
     "--format",
     type=click.Choice(["plain", "json", "csv"], case_sensitive=False),
-    default="plain",
+    default=None,
     help="输出格式（plain/json/csv）",
 )
 @pass_context
 def duplicates_cmd(
     ctx: click.Context,
     path: str,
-    recursive: bool,
+    recursive: Optional[bool],
     no_recursive: bool,
-    min_size: int,
+    min_size: Optional[int],
     extension: tuple[str, ...],
     show_commands: bool,
-    format: str,
+    format: Optional[str],
 ) -> None:
     """查找指定目录中的重复文件.
 
@@ -375,67 +465,39 @@ def duplicates_cmd(
       tools duplicates . --show-commands   # 显示删除建议
       tools duplicates . --format json     # JSON格式输出
     """
-    # 处理递归选项冲突
-    if no_recursive:
-        recursive = False
+    # 获取配置
+    config = ctx.obj.get("config")
 
-    # 转换扩展名列表
-    extensions = list(extension) if extension else None
+    # 设置默认输出格式
+    if format is None:
+        format = config.format if config else "plain"
 
     try:
-        # 创建配置对象
-        config = DuplicateConfig(
-            path=path, recursive=recursive, min_size=min_size, extensions=extensions
+        # 准备配置
+        duplicate_config = _prepare_duplicate_config(
+            ctx, path, recursive, no_recursive, min_size, extension
         )
 
-        # 创建检测器并执行检测
-        finder = DuplicateFinder(config)
+        # 创建检测器
+        finder = DuplicateFinder(duplicate_config)
 
         # 显示开始信息（仅在plain格式时显示）
         if format == "plain":
             click.echo("🔍 开始扫描重复文件...")
 
         # 执行检测
-        duplicate_groups = finder.find_duplicates()
-
-        # 计算扫描的总文件数（用于统计显示）
-        all_files = finder._scan_files()
-        total_files = len(all_files)
+        duplicate_groups, all_files = _execute_duplicate_finder(finder)
 
         # 根据格式选择输出方式
         if format != "plain":
-            # 计算总的节省空间
-            total_save_space = sum(group.potential_save for group in duplicate_groups)
-
-            # 构建格式化数据
-            groups_data = []
-            for group in duplicate_groups:
-                groups_data.append(
-                    {
-                        "hash": group.hash,
-                        "size": group.size,
-                        "count": group.count,
-                        "files": [str(f) for f in group.files],
-                    }
-                )
-
-            # 创建数据模型
-            data = DuplicateData(
-                total_groups=len(duplicate_groups),
-                total_size_saved=total_save_space,
-                groups=groups_data,
-            )
-
-            # 格式化输出
-            output = format_output(data, OutputFormat(format))
-            click.echo(output)
+            _handle_formatted_output(duplicate_groups, format)
         else:
             # 保持原有的纯文本输出方式
             display_duplicate_results(
                 duplicate_groups=duplicate_groups,
                 scan_path=os.path.abspath(path),
-                total_files=total_files,
-                recursive=recursive,
+                total_files=len(all_files),
+                recursive=duplicate_config.recursive,
                 show_commands=show_commands,
             )
 

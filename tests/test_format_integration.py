@@ -44,7 +44,7 @@ class TestFormatIntegration:
 
             # 验证输出
             assert result.exit_code == 0
-            assert "name,size,type" in result.output
+            assert "name,type,size,modified" in result.output
             assert "test.txt" in result.output
 
     def test_list_command_default_format(self) -> None:
@@ -73,7 +73,8 @@ class TestFormatIntegration:
 
             # 运行命令
             result = self.runner.invoke(cli, ["duplicates", tmpdir, "--format", "json"])
-
+            # 测试临时加入
+            print(result.output)
             # 验证输出
             assert result.exit_code == 0
             data = json.loads(result.output)
