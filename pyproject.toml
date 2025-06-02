@@ -24,7 +24,7 @@ python   = "^3.13.3"            # 项目基于 3.13.3；^ 允许 3.x 后续 patc
 click    = "^8.2.1"             # 8.2.1 为 8.x 最新，支持 3.13
 pydantic = "^2.11.5"            # 2.11.5 为 v2 系列最新；享受 dataclass-like TypedDict
 logfire  = "^3.16.0"            # 3.16.0 是 2025-05-14 最新版，引入显式 configure 行为
-
+pyyaml   = "^6.0"
 [tool.poetry.group.dev.dependencies]
 pytest      = "^8.3.5"          # 与 CI 一致；8.3.5 为 2025-05-26 发布
 pytest-cov  = "^6.1.1"          # Pytest-cov 最新
