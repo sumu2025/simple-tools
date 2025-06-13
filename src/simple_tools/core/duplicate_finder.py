@@ -1,4 +1,4 @@
-"""重复文件检测工具 - 智能查找目录中的重复文件."""
+"""重复文件检测模块."""
 
 import hashlib
 import os
@@ -11,6 +11,7 @@ import logfire
 from pydantic import BaseModel, Field
 
 from simple_tools._typing import argument, command, option, pass_context
+from simple_tools.utils.errors import ErrorContext, ToolError
 
 from ..utils.formatter import DuplicateData, format_output
 from ..utils.progress import process_with_progress
@@ -68,11 +69,71 @@ class DuplicateFinder:
                 for chunk in iter(lambda: f.read(8192), b""):
                     hash_md5.update(chunk)
             return hash_md5.hexdigest()
+        except PermissionError:
+            context = ErrorContext(
+                operation="计算文件哈希",
+                file_path=str(file_path),
+                details={"error_type": "权限不足"},
+            )
+            raise ToolError(
+                f"无法读取文件 {file_path}",
+                error_code="PERMISSION_DENIED",
+                context=context,
+                suggestions=[
+                    "检查文件权限设置",
+                    "尝试使用管理员权限运行",
+                    "确认文件未被其他程序占用",
+                ],
+            )
+        except FileNotFoundError:
+            context = ErrorContext(
+                operation="计算文件哈希",
+                file_path=str(file_path),
+                details={"error_type": "文件不存在"},
+            )
+            raise ToolError(
+                f"文件不存在 {file_path}",
+                error_code="FILE_NOT_FOUND",
+                context=context,
+                suggestions=["重新运行扫描", "检查文件是否被移动或删除"],
+            )
+        except OSError as e:
+            context = ErrorContext(
+                operation="计算文件哈希",
+                file_path=str(file_path),
+                details={"error_type": "系统错误", "original_error": str(e)},
+            )
+            raise ToolError(
+                f"读取文件失败 {file_path}",
+                error_code="OPERATION_FAILED",
+                context=context,
+                original_error=e,
+                suggestions=[
+                    "检查磁盘空间是否充足",
+                    "检查文件系统是否正常",
+                    "尝试重新运行命令",
+                ],
+            )
         except Exception as e:
             logfire.error(
                 f"计算文件哈希失败: {file_path}", attributes={"error": str(e)}
             )
-            raise
+            context = ErrorContext(
+                operation="计算文件哈希",
+                file_path=str(file_path),
+                details={"error_type": "未知错误", "original_error": str(e)},
+            )
+            raise ToolError(
+                f"计算文件哈希失败 {file_path}",
+                error_code="GENERAL_ERROR",
+                context=context,
+                original_error=e,
+                suggestions=[
+                    "检查文件是否损坏",
+                    "尝试重新运行命令",
+                    "如果问题持续，请报告此错误",
+                ],
+            )
 
     def _should_include_file(self, file_path: Path) -> bool:
         """判断文件是否应该包含在检测范围内.
@@ -104,6 +165,38 @@ class DuplicateFinder:
             files = []
             scan_path = Path(self.config.path)
 
+            # 检查路径是否存在
+            if not scan_path.exists():
+                context = ErrorContext(
+                    operation="扫描目录",
+                    file_path=str(scan_path),
+                    details={"error_type": "路径不存在"},
+                )
+                raise ToolError(
+                    f"扫描路径不存在: {self.config.path}",
+                    error_code="FILE_NOT_FOUND",
+                    context=context,
+                    suggestions=[
+                        "检查路径拼写是否正确",
+                        "确认目录是否存在",
+                        "使用绝对路径重试",
+                    ],
+                )
+
+            # 检查是否为目录
+            if not scan_path.is_dir():
+                context = ErrorContext(
+                    operation="扫描目录",
+                    file_path=str(scan_path),
+                    details={"error_type": "不是目录"},
+                )
+                raise ToolError(
+                    f"扫描路径不是目录: {self.config.path}",
+                    error_code="VALIDATION_ERROR",
+                    context=context,
+                    suggestions=["指定一个目录路径", "使用父目录路径"],
+                )
+
             try:
                 # 根据配置选择扫描方式
                 if self.config.recursive:
@@ -130,48 +223,101 @@ class DuplicateFinder:
                 logfire.info(f"扫描完成，找到 {len(files)} 个文件")
                 return files
 
-            except Exception as e:
-                logfire.error(f"扫描文件失败: {str(e)}")
-                raise
+            except PermissionError:
+                context = ErrorContext(
+                    operation="扫描目录",
+                    file_path=str(scan_path),
+                    details={"error_type": "权限不足"},
+                )
+                raise ToolError(
+                    f"无权限访问目录: {self.config.path}",
+                    error_code="PERMISSION_DENIED",
+                    context=context,
+                    suggestions=[
+                        "检查目录权限设置",
+                        "尝试使用管理员权限运行",
+                        "选择有权限访问的目录",
+                    ],
+                )
+            except OSError as e:
+                context = ErrorContext(
+                    operation="扫描目录",
+                    file_path=str(scan_path),
+                    details={"error_type": "系统错误", "original_error": str(e)},
+                )
+                raise ToolError(
+                    f"扫描目录失败: {self.config.path}",
+                    error_code="OPERATION_FAILED",
+                    context=context,
+                    original_error=e,
+                    suggestions=[
+                        "检查磁盘空间是否充足",
+                        "检查文件系统是否正常",
+                        "尝试重新运行命令",
+                    ],
+                )
 
     def find_duplicates(self) -> list[DuplicateGroup]:
         """查找重复文件.
 
         返回：DuplicateGroup对象列表，每个组包含重复的文件
         """
-        with logfire.span("find_duplicates"):
-            logfire.info("开始重复文件检测")
+        try:
+            with logfire.span("find_duplicates"):
+                logfire.info("开始重复文件检测")
 
-            # 第一步：扫描所有文件
-            all_files = self._scan_files()
-            if not all_files:
-                logfire.info("没有找到符合条件的文件")
-                return []
+                # 第一步：扫描所有文件
+                all_files = self._scan_files()
+                if not all_files:
+                    logfire.info("没有找到符合条件的文件")
+                    return []
 
-            # 第二步：按文件大小分组
-            size_groups = self._group_files_by_size(all_files)
-            # 过滤掉只有一个文件的大小组
-            potential_duplicates = {
-                size: files for size, files in size_groups.items() if len(files) > 1
-            }
-            logfire.info(
-                f"按大小分组后，{len(potential_duplicates)} 个大小组可能包含重复文件"
+                # 第二步：按文件大小分组
+                size_groups = self._group_files_by_size(all_files)
+                # 过滤掉只有一个文件的大小组
+                potential_duplicates = {
+                    size: files for size, files in size_groups.items() if len(files) > 1
+                }
+                logfire.info(
+                    f"按大小分组后，{len(potential_duplicates)} 个大小组"
+                    "可能包含重复文件"
+                )
+
+                # 第三步：组装哈希任务
+                all_files_to_hash = self._collect_files_to_hash(potential_duplicates)
+                logfire.info(f"需要计算 {len(all_files_to_hash)} 个文件的哈希值")
+
+                # 第四步：批量计算哈希并分组
+                size_hash_groups = self._group_files_by_hash(all_files_to_hash)
+
+                # 第五步：组装最终重复组
+                duplicate_groups = self._assemble_duplicate_groups(size_hash_groups)
+
+                # 按可节省空间排序（从大到小）
+                duplicate_groups.sort(key=lambda x: x.potential_save, reverse=True)
+                logfire.info(f"检测完成，发现 {len(duplicate_groups)} 组重复文件")
+                return duplicate_groups
+        except ToolError:
+            # ToolError 直接传播
+            raise
+        except Exception as e:
+            logfire.error(f"重复文件检测失败: {str(e)}")
+            context = ErrorContext(
+                operation="重复文件检测",
+                details={"error_type": "未知错误", "original_error": str(e)},
             )
-
-            # 第三步：组装哈希任务
-            all_files_to_hash = self._collect_files_to_hash(potential_duplicates)
-            logfire.info(f"需要计算 {len(all_files_to_hash)} 个文件的哈希值")
-
-            # 第四步：批量计算哈希并分组
-            size_hash_groups = self._group_files_by_hash(all_files_to_hash)
-
-            # 第五步：组装最终重复组
-            duplicate_groups = self._assemble_duplicate_groups(size_hash_groups)
-
-            # 按可节省空间排序（从大到小）
-            duplicate_groups.sort(key=lambda x: x.potential_save, reverse=True)
-            logfire.info(f"检测完成，发现 {len(duplicate_groups)} 组重复文件")
-            return duplicate_groups
+            raise ToolError(
+                "重复文件检测失败",
+                error_code="GENERAL_ERROR",
+                context=context,
+                original_error=e,
+                suggestions=[
+                    "检查输入参数是否正确",
+                    "确认目录权限设置",
+                    "尝试重新运行命令",
+                    "如果问题持续，请报告此错误",
+                ],
+            )
 
     def _group_files_by_size(
         self, all_files: list["FileInfo"]
@@ -344,7 +490,7 @@ def _prepare_duplicate_config(
     从命令行参数和配置文件中获取配置，并处理默认值和冲突。
     """
     # 获取配置
-    config = ctx.obj.get("config")
+    config = ctx.obj.get("config") if ctx.obj else None
 
     # 应用配置文件的默认值（命令行参数优先）
     if config and config.duplicates:
@@ -466,7 +612,7 @@ def duplicates_cmd(
       tools duplicates . --format json     # JSON格式输出
     """
     # 获取配置
-    config = ctx.obj.get("config")
+    config = ctx.obj.get("config") if ctx.obj else None
 
     # 设置默认输出格式
     if format is None:
@@ -501,10 +647,50 @@ def duplicates_cmd(
                 show_commands=show_commands,
             )
 
+        # 记录到操作历史
+        from ..utils.smart_interactive import operation_history
+
+        # 计算总的节省空间
+        total_save_space = sum(group.potential_save for group in duplicate_groups)
+
+        operation_history.add(
+            "duplicates",
+            {
+                "path": path,
+                "recursive": duplicate_config.recursive,
+                "min_size": duplicate_config.min_size,
+                "extensions": duplicate_config.extensions,
+                "format": format,
+            },
+            {
+                "scanned_files": len(all_files),
+                "duplicate_groups": len(duplicate_groups),
+                "space_saved": total_save_space,
+            },
+        )
+
+    except ToolError:
+        # ToolError 会被 handle_errors 装饰器自动处理
+        raise
     except click.ClickException:
         # Click异常直接传播
         raise
     except Exception as e:
-        # 其他异常转换为Click异常
+        # 其他异常转换为ToolError
         logfire.error(f"重复文件检测失败: {str(e)}")
-        raise click.ClickException(f"错误：{str(e)}")
+        context = ErrorContext(
+            operation="重复文件检测",
+            details={"error_type": "未知错误", "original_error": str(e)},
+        )
+        raise ToolError(
+            "重复文件检测失败",
+            error_code="GENERAL_ERROR",
+            context=context,
+            original_error=e,
+            suggestions=[
+                "检查输入参数是否正确",
+                "确认目录权限设置",
+                "尝试重新运行命令",
+                "如果问题持续，请报告此错误",
+            ],
+        )

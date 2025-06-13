@@ -1,0 +1,148 @@
+{
+  "path": "/Users/peacock/Projects/simple-tools",
+  "total": 26,
+  "files": [
+    {
+      "name": ".git",
+      "type": "directory",
+      "size": 0
+    },
+    {
+      "name": ".github",
+      "type": "directory",
+      "size": 0
+    },
+    {
+      "name": ".logfire",
+      "type": "directory",
+      "size": 0
+    },
+    {
+      "name": ".mypy_cache",
+      "type": "directory",
+      "size": 0
+    },
+    {
+      "name": ".pytest_cache",
+      "type": "directory",
+      "size": 0
+    },
+    {
+      "name": ".ruff_cache",
+      "type": "directory",
+      "size": 0
+    },
+    {
+      "name": ".venv",
+      "type": "directory",
+      "size": 0
+    },
+    {
+      "name": "dist",
+      "type": "directory",
+      "size": 0
+    },
+    {
+      "name": "docs",
+      "type": "directory",
+      "size": 0
+    },
+    {
+      "name": "htmlcov",
+      "type": "directory",
+      "size": 0
+    },
+    {
+      "name": "sandbox",
+      "type": "directory",
+      "size": 0
+    },
+    {
+      "name": "src",
+      "type": "directory",
+      "size": 0
+    },
+    {
+      "name": "test_data",
+      "type": "directory",
+      "size": 0
+    },
+    {
+      "name": "tests",
+      "type": "directory",
+      "size": 0
+    },
+    {
+      "name": "....",
+      "type": "file",
+      "size": 0,
+      "modified": "2025-06-08 15:10:40"
+    },
+    {
+      "name": ".DS_Store",
+      "type": "file",
+      "size": 6148,
+      "modified": "2025-06-01 07:09:08"
+    },
+    {
+      "name": ".gitignore",
+      "type": "file",
+      "size": 816,
+      "modified": "2025-05-30 16:33:56"
+    },
+    {
+      "name": ".pre-commit-config.yaml",
+      "type": "file",
+      "size": 2530,
+      "modified": "2025-06-02 14:36:52"
+    },
+    {
+      "name": ".simple-tools.yml",
+      "type": "file",
+      "size": 559,
+      "modified": "2025-06-05 12:15:34"
+    },
+    {
+      "name": "CHANGELOG.md",
+      "type": "file",
+      "size": 1197,
+      "modified": "2025-05-30 16:33:56"
+    },
+    {
+      "name": "duplicates.csv",
+      "type": "file",
+      "size": 35251,
+      "modified": "2025-06-08 15:17:55"
+    },
+    {
+      "name": "LICENSE",
+      "type": "file",
+      "size": 1065,
+      "modified": "2025-05-28 02:58:12"
+    },
+    {
+      "name": "list.json",
+      "type": "file",
+      "size": 0,
+      "modified": "2025-06-08 21:29:47"
+    },
+    {
+      "name": "poetry.lock",
+      "type": "file",
+      "size": 106979,
+      "modified": "2025-06-03 15:01:18"
+    },
+    {
+      "name": "pyproject.toml",
+      "type": "file",
+      "size": 4745,
+      "modified": "2025-06-03 15:20:07"
+    },
+    {
+      "name": "README.md",
+      "type": "file",
+      "size": 5508,
+      "modified": "2025-05-30 22:38:06"
+    }
+  ]
+}

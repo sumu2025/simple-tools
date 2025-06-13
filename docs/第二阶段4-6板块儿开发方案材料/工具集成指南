@@ -1,0 +1,325 @@
+# 工具集成指南
+
+*文档版本: 1.0 | 创建日期: 2025-06-02*
+
+## 概述
+
+本文档说明如何将三个新系统（错误处理、智能交互、性能优化）集成到现有的5个工具中。
+
+## 集成原则
+
+1. **最小化修改** - 保持原有逻辑，只增强体验
+2. **渐进式应用** - 先在一个工具试用，成功后推广
+3. **可选性优化** - 性能优化只在必要时应用
+4. **统一体验** - 所有工具使用相同的交互模式
+
+## 各工具集成方案
+
+### 1. file_tool.py（文件列表工具）
+
+```python
+# 导入新模块
+from ..utils.errors import handle_errors, ToolError
+from ..utils.optimized_ops import scan_directory_fast
+
+# 应用错误处理装饰器
+@handle_errors("list_files")
+def list_files(directory: str, show_hidden: bool = False) -> list[dict]:
+    """列出目录文件 - 增强版"""
+    # 原有逻辑保持不变
+    ...
+
+# 在 list_cmd 中使用优化的扫描（可选）
+def list_cmd(...):
+    # 对于大目录使用优化版本
+    if os.path.isdir(path):
+        items = list(scan_directory_fast(Path(path), skip_hidden=not all))
+    else:
+        items = list_files(path, show_hidden=all)
+```
+
+### 2. duplicate_finder.py（重复文件检测）
+
+```python
+# 导入新模块
+from ..utils.errors import handle_errors, BatchErrorCollector
+from ..utils.smart_interactive import smart_confirm
+from ..utils.optimized_ops import OptimizedFileComparator, scan_directory_fast
+
+# 使用批量错误收集
+def find_duplicates(self) -> DuplicateResult:
+    """查找重复文件 - 增强版"""
+    collector = BatchErrorCollector()
+    comparator = OptimizedFileComparator()
+
+    # 扫描文件
+    for file_stat in scan_directory_fast(
+        Path(self.config.path),
+        recursive=self.config.recursive
+    ):
+        if not file_stat.is_dir and file_stat.size >= self.config.min_size:
+            try:
+                comparator.add_file(file_stat.path)
+                collector.record_success()
+            except Exception as e:
+                collector.record_error(file_stat.path, e)
+
+    # 查找重复
+    duplicate_groups = list(comparator.find_duplicates())
+
+    # 显示错误汇总
+    if collector.errors:
+        click.echo(collector.format_summary())
+
+    return duplicate_groups
+
+# 使用智能确认
+def duplicates_cmd(...):
+    # ... 扫描和查找重复文件 ...
+
+    # 使用智能确认对话框
+    if duplicate_groups and smart_confirm(
+        "处理重复文件",
+        duplicate_groups,
+        dangerous=False,
+        format_item=lambda g: f"{len(g)} 个文件, 每个 {format_size(g[0].stat().st_size)}"
+    ):
+        # 执行处理
+        ...
+```
+
+### 3. batch_rename.py（批量重命名）
+
+```python
+# 导入新模块
+from ..utils.errors import handle_errors, BatchErrorCollector
+from ..utils.smart_interactive import smart_confirm, operation_history
+
+# 增强的预览确认
+def preview_rename(self, items: list[RenameItem]) -> bool:
+    """预览重命名 - 使用智能确认"""
+    # 准备预览数据
+    preview_items = [
+        f"{item.old_path.name} → {item.new_path.name}"
+        for item in items[:10]
+    ]
+
+    # 使用智能确认
+    dangerous = len(items) > 50  # 大批量操作标记为危险
+    return smart_confirm(
+        f"重命名 {len(items)} 个文件",
+        preview_items,
+        dangerous=dangerous
+    )
+
+# 记录操作历史
+def rename_cmd(...):
+    # ... 执行重命名 ...
+
+    # 记录到历史
+    operation_history.add(
+        "rename",
+        {"pattern": pattern, "path": path, "count": len(files)},
+        {"success": result.success, "failed": result.failed}
+    )
+```
+
+### 4. text_replace.py（文本替换）
+
+```python
+# 导入新模块
+from ..utils.errors import handle_errors, BatchErrorCollector
+from ..utils.optimized_ops import StreamingTextReplacer, process_large_text_file
+
+# 对大文件使用流式处理
+def replace_in_file(self, file_path: Path) -> ReplaceResult:
+    """替换文件中的文本 - 优化版"""
+    file_size = file_path.stat().st_size
+
+    # 小文件使用原方法
+    if file_size < 10 * 1024 * 1024:  # 10MB
+        return self._replace_small_file(file_path)
+
+    # 大文件使用流式处理
+    replacer = StreamingTextReplacer(self.config.old_text, self.config.new_text)
+    total_count = 0
+
+    # 创建临时文件
+    temp_file = file_path.with_suffix('.tmp')
+
+    with open(file_path, 'r', encoding='utf-8') as f_in:
+        with open(temp_file, 'w', encoding='utf-8') as f_out:
+            for chunk in iter(lambda: f_in.read(1024 * 1024), ''):
+                replaced, count = replacer.process_chunk(chunk)
+                f_out.write(replaced)
+                total_count += count
+
+            # 处理最后的缓冲区
+            final, count = replacer.flush()
+            f_out.write(final)
+            total_count += count
+
+    # 替换原文件
+    if total_count > 0:
+        temp_file.replace(file_path)
+    else:
+        temp_file.unlink()
+
+    return ReplaceResult(
+        file_path=file_path,
+        match_count=total_count,
+        replaced=total_count > 0
+    )
+```
+
+### 5. file_organizer.py（文件整理）
+
+```python
+# 导入新模块
+from ..utils.errors import handle_errors, BatchErrorCollector
+from ..utils.smart_interactive import smart_confirm
+from ..utils.optimized_ops import scan_directory_fast
+
+# 使用优化的扫描和批量错误处理
+def organize_files(self) -> OrganizeResult:
+    """整理文件 - 增强版"""
+    collector = BatchErrorCollector()
+
+    # 使用优化的扫描
+    files = list(scan_directory_fast(
+        Path(self.config.path),
+        recursive=self.config.recursive,
+        skip_hidden=True
+    ))
+
+    # 分类文件
+    organize_plan = self._create_organize_plan(files)
+
+    # 智能确认
+    if not smart_confirm(
+        f"整理 {len(organize_plan)} 个文件",
+        organize_plan[:10],
+        format_item=lambda p: f"{p.source.name} → {p.category}/"
+    ):
+        return OrganizeResult(cancelled=True)
+
+    # 执行整理
+    for plan_item in organize_plan:
+        try:
+            self._move_file(plan_item)
+            collector.record_success()
+        except Exception as e:
+            collector.record_error(plan_item.source, e)
+
+    # 显示错误汇总
+    if collector.errors:
+        click.echo(collector.format_summary())
+
+    return OrganizeResult(
+        total=len(organize_plan),
+        success=collector.success_count,
+        failed=len(collector.errors)
+    )
+```
+
+## CLI 主入口集成
+
+### 添加 history 命令
+
+```python
+# 在 cli.py 中添加
+from .utils.smart_interactive import operation_history
+
+@cli.command()
+@click.option('-n', '--count', default=10, help='显示最近N条记录')
+def history(count: int):
+    """查看操作历史"""
+    operation_history.show_recent(count)
+```
+
+### 全局错误处理
+
+```python
+# 在 cli.py 的主入口
+@cli.callback()
+def main_callback(ctx, verbose, config):
+    """主回调 - 设置全局错误处理"""
+    # 设置错误格式化
+    def format_error(self, ctx, formatter):
+        """自定义错误格式"""
+        if isinstance(self, ToolError):
+            # 使用我们的格式
+            click.echo(self.format_message(), err=True)
+        else:
+            # 使用默认格式
+            click.ClickException.format_message(self, ctx, formatter)
+
+    click.ClickException.format_message = format_error
+```
+
+## 测试策略
+
+### 单元测试更新
+
+```python
+# 测试新的错误处理
+def test_friendly_error():
+    """测试友好的错误信息"""
+    with pytest.raises(ToolError) as exc_info:
+        list_files("/nonexistent/path")
+
+    error = exc_info.value
+    assert error.error_code == "FILE_NOT_FOUND"
+    assert len(error.suggestions) > 0
+
+# 测试性能优化
+def test_large_file_handling(tmp_path):
+    """测试大文件处理"""
+    # 创建大文件
+    large_file = tmp_path / "large.txt"
+    large_file.write_text("x" * (10 * 1024 * 1024))  # 10MB
+
+    # 应该使用流式处理
+    result = replace_in_file(large_file, "x", "y")
+    assert result.replaced
+```
+
+## 逐步实施计划
+
+### 第1天：基础集成
+1. 创建三个新模块
+2. 在 file_tool.py 中试用错误处理
+3. 测试和调试
+
+### 第2天：扩展应用
+1. 将错误处理应用到所有工具
+2. 在 batch_rename 中试用智能确认
+3. 添加 history 命令
+
+### 第3天：性能优化
+1. 在 duplicate_finder 中应用优化
+2. 测试大文件处理
+3. 收集性能数据
+
+### 第4天：完善和测试
+1. 完成所有工具的集成
+2. 更新单元测试
+3. 文档更新
+
+## 回滚方案
+
+如果新功能出现问题：
+
+1. **错误处理**: 移除装饰器即可恢复
+2. **智能交互**: 替换回 click.confirm
+3. **性能优化**: 使用原有函数
+
+所有修改都是增量式的，可以轻松回滚。
+
+## 成功指标
+
+- [ ] 所有工具的错误信息都提供解决建议
+- [ ] 批量操作显示友好的错误汇总
+- [ ] 危险操作有明确的风险提示
+- [ ] 大文件处理不会内存溢出
+- [ ] 用户可以查看操作历史

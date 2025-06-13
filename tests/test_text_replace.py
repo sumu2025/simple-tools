@@ -147,10 +147,18 @@ class TestTextReplaceTool:
         config = ReplaceConfig(pattern="hello:hi", file="/nonexistent/file.txt")
 
         tool = TextReplaceTool(config)
-        files = tool.scan_files()
 
-        # 不存在的文件应该被忽略
-        assert len(files) == 0
+        # 根据新的错误处理系统，不存在的文件应该抛出ToolError
+        import pytest
+
+        from simple_tools.utils.errors import ToolError
+
+        with pytest.raises(ToolError) as exc_info:
+            tool.scan_files()
+
+        # 验证错误信息
+        assert exc_info.value.error_code == "FILE_NOT_FOUND"
+        assert "文件不存在" in str(exc_info.value)
 
     def test_empty_directory_handling(self, tmp_path: Path) -> None:
         """测试空目录处理."""

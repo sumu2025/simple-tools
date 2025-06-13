@@ -1,0 +1,344 @@
+# 智能交互系统
+
+*文件位置: `src/simple_tools/utils/smart_interactive.py`*
+*预计代码量: ~100行*
+
+## 系统概述
+
+利用 Pydantic v2 的模型验证和 Python 3.13 的类型系统，构建一个智能、友好的用户交互系统。
+
+## 核心功能
+
+1. **增强确认对话** - 显示操作预览和风险提示
+2. **智能命令建议** - 基于相似度匹配提供建议
+3. **操作历史记录** - 简单的 JSON 历史记录
+4. **上下文感知提示** - 根据操作类型提供相关帮助
+
+## 实现代码
+
+```python
+"""智能交互系统 - 利用现代 Python 和 Pydantic 特性"""
+
+from typing import Any, Optional, TypeVar
+from pathlib import Path
+from difflib import get_close_matches
+import json
+from datetime import datetime
+from pydantic import BaseModel, Field, computed_field
+import click
+import logfire
+
+
+T = TypeVar('T')
+
+
+class ConfirmConfig(BaseModel):
+    """确认对话框配置"""
+    operation: str = Field(..., description="操作描述")
+    item_count: int = Field(..., description="操作项目数量")
+    dangerous: bool = Field(False, description="是否为危险操作")
+    preview_items: list[Any] = Field(default_factory=list, description="预览项目")
+    max_preview: int = Field(5, description="最大预览数量")
+
+    @computed_field
+    @property
+    def risk_level(self) -> str:
+        """计算风险等级"""
+        if self.dangerous:
+            return "高"
+        elif self.item_count > 100:
+            return "中"
+        else:
+            return "低"
+
+    @computed_field
+    @property
+    def default_choice(self) -> bool:
+        """基于风险等级的默认选择"""
+        return self.risk_level == "低"
+
+
+def smart_confirm(
+    operation: str,
+    items: list[Any],
+    dangerous: bool = False,
+    format_item: Optional[callable] = None
+) -> bool:
+    """智能确认对话框"""
+    config = ConfirmConfig(
+        operation=operation,
+        item_count=len(items),
+        dangerous=dangerous,
+        preview_items=items[:5]
+    )
+
+    # 显示操作概要
+    click.echo(f"\n📋 即将{operation} {config.item_count} 个项目")
+
+    # 风险提示
+    risk_icons = {"低": "✅", "中": "⚠️", "高": "❌"}
+    risk_colors = {"低": "green", "中": "yellow", "高": "red"}
+    click.echo(
+        click.style(
+            f"{risk_icons[config.risk_level]} 风险等级: {config.risk_level}",
+            fg=risk_colors[config.risk_level]
+        )
+    )
+
+    # 显示预览
+    if config.preview_items:
+        click.echo(f"\n预览（前 {len(config.preview_items)} 项）：")
+        for item in config.preview_items:
+            if format_item:
+                display = format_item(item)
+            else:
+                display = str(item)
+            click.echo(f"  • {display}")
+
+        if config.item_count > config.max_preview:
+            click.echo(f"  ... 还有 {config.item_count - config.max_preview} 项")
+
+    # 危险操作特殊提示
+    if config.dangerous:
+        click.echo(
+            click.style("\n⚠️  此操作不可撤销，请谨慎确认！", fg="yellow", bold=True)
+        )
+
+    # 记录到 Logfire
+    with logfire.span("user_confirm", attributes={
+        "operation": operation,
+        "item_count": config.item_count,
+        "risk_level": config.risk_level
+    }) as span:
+        # 确认提示
+        result = click.confirm(
+            f"\n确认{operation}？",
+            default=config.default_choice
+        )
+        span.set_attribute("confirmed", result)
+
+    return result
+
+
+class CommandSuggester:
+    """命令建议器"""
+
+    def __init__(self):
+        self.commands = {
+            "list": {
+                "description": "列出目录文件",
+                "example": "tools list ~/Documents --all",
+                "aliases": ["ls", "dir", "show"]
+            },
+            "duplicates": {
+                "description": "查找重复文件",
+                "example": "tools duplicates . --recursive",
+                "aliases": ["dup", "find-duplicates"]
+            },
+            "rename": {
+                "description": "批量重命名文件",
+                "example": "tools rename 'old:new' --path .",
+                "aliases": ["mv", "move", "batch-rename"]
+            },
+            "replace": {
+                "description": "批量替换文本",
+                "example": "tools replace 'TODO:DONE' -f file.txt",
+                "aliases": ["sed", "substitute", "find-replace"]
+            },
+            "organize": {
+                "description": "自动整理文件",
+                "example": "tools organize ~/Downloads --mode type",
+                "aliases": ["sort", "cleanup", "tidy"]
+            }
+        }
+
+    def suggest(self, user_input: str) -> Optional[dict[str, Any]]:
+        """根据用户输入提供命令建议"""
+        user_input = user_input.lower().strip()
+
+        # 直接匹配
+        if user_input in self.commands:
+            return self.commands[user_input]
+
+        # 别名匹配
+        for cmd, info in self.commands.items():
+            if user_input in info["aliases"]:
+                return {"command": cmd, **info}
+
+        # 模糊匹配
+        all_names = list(self.commands.keys())
+        for info in self.commands.values():
+            all_names.extend(info["aliases"])
+
+        matches = get_close_matches(user_input, all_names, n=1, cutoff=0.6)
+        if matches:
+            match = matches[0]
+            # 找到对应的命令
+            for cmd, info in self.commands.items():
+                if match == cmd or match in info["aliases"]:
+                    return {"command": cmd, "suggested": True, **info}
+
+        return None
+
+    def show_help(self, command: str, error_msg: str = ""):
+        """显示命令帮助信息"""
+        if error_msg:
+            click.echo(f"\n❌ {error_msg}")
+
+        suggestion = self.suggest(command)
+        if suggestion:
+            if suggestion.get("suggested"):
+                click.echo(f"\n💡 您是否想要使用 '{suggestion['command']}' 命令？")
+
+            click.echo(f"\n📖 {suggestion['description']}")
+            click.echo(f"示例: {suggestion['example']}")
+        else:
+            click.echo("\n💡 可用命令:")
+            for cmd, info in self.commands.items():
+                click.echo(f"  • {cmd}: {info['description']}")
+
+
+class OperationHistory:
+    """操作历史记录 - 简单实现"""
+
+    def __init__(self):
+        self.history_file = Path.home() / ".simple-tools" / "history.json"
+        self.history_file.parent.mkdir(exist_ok=True)
+        self.max_records = 100
+
+    def add(self, command: str, args: dict[str, Any], result: dict[str, Any]):
+        """添加历史记录"""
+        record = {
+            "timestamp": datetime.now().isoformat(),
+            "command": command,
+            "args": args,
+            "result": result
+        }
+
+        # 加载现有历史
+        history = self._load()
+        history.append(record)
+
+        # 保留最近的记录
+        if len(history) > self.max_records:
+            history = history[-self.max_records:]
+
+        # 保存
+        self._save(history)
+
+        # 记录到 Logfire
+        logfire.info(
+            f"操作记录: {command}",
+            attributes={"command": command, "args": args}
+        )
+
+    def get_recent(self, count: int = 10) -> list[dict[str, Any]]:
+        """获取最近的操作记录"""
+        history = self._load()
+        return history[-count:] if history else []
+
+    def show_recent(self, count: int = 10):
+        """显示最近的操作记录"""
+        records = self.get_recent(count)
+
+        if not records:
+            click.echo("暂无操作记录")
+            return
+
+        click.echo(f"\n📜 最近 {len(records)} 条操作记录：")
+        for i, record in enumerate(records, 1):
+            timestamp = datetime.fromisoformat(record["timestamp"])
+            time_str = timestamp.strftime("%Y-%m-%d %H:%M:%S")
+            click.echo(f"\n{i}. [{time_str}] {record['command']}")
+            if record.get("args"):
+                click.echo(f"   参数: {record['args']}")
+            if record.get("result"):
+                click.echo(f"   结果: {record['result']}")
+
+    def _load(self) -> list[dict[str, Any]]:
+        """加载历史记录"""
+        if not self.history_file.exists():
+            return []
+
+        try:
+            with open(self.history_file, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception:
+            return []
+
+    def _save(self, history: list[dict[str, Any]]):
+        """保存历史记录"""
+        with open(self.history_file, 'w', encoding='utf-8') as f:
+            json.dump(history, f, ensure_ascii=False, indent=2)
+
+
+# 全局实例
+command_suggester = CommandSuggester()
+operation_history = OperationHistory()
+```
+
+## 使用示例
+
+### 1. 智能确认对话
+
+```python
+from simple_tools.utils.smart_interactive import smart_confirm
+
+# 普通操作
+files = ["file1.txt", "file2.txt", "file3.txt"]
+if smart_confirm("删除文件", files):
+    # 执行删除
+    pass
+
+# 危险操作
+files = ["important.doc", "backup.zip", ...]  # 100+ 文件
+if smart_confirm("永久删除文件", files, dangerous=True):
+    # 执行删除
+    pass
+```
+
+### 2. 命令建议
+
+```python
+from simple_tools.utils.smart_interactive import command_suggester
+
+# 在 CLI 错误处理中使用
+try:
+    # 执行命令
+    pass
+except click.UsageError:
+    command_suggester.show_help(
+        user_command,
+        "命令不存在"
+    )
+```
+
+### 3. 操作历史
+
+```python
+from simple_tools.utils.smart_interactive import operation_history
+
+# 记录操作
+operation_history.add(
+    "rename",
+    {"pattern": "old:new", "path": "/path/to/files"},
+    {"success": 10, "failed": 0}
+)
+
+# 显示历史
+operation_history.show_recent(5)
+```
+
+## 集成要点
+
+1. **确认对话增强** - 替换现有的 `click.confirm` 调用
+2. **错误时提供建议** - 在命令错误时自动提供相似命令
+3. **记录关键操作** - 在工具执行完成后记录结果
+4. **保持简单** - 不过度设计，只提供必要功能
+
+## 预期效果
+
+- 用户在执行危险操作时得到充分警告
+- 命令输错时获得智能提示
+- 可以查看历史操作记录
+- 交互体验更加友好和智能

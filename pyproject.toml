@@ -35,6 +35,7 @@ ruff        = "^0.11.11"          # 0.11 系列最新，速度快、规则多
 mypy        = "^1.15.0"         # 1.15.0 首次官方支持 Python 3.13
 types-click = "^7.1.8"          # click 的类型存根，消除 stub 警告
 types-pyyaml = "^6.0.12.20250516"
+pytest-asyncio = "^1.0.0"
 
 [tool.poetry.scripts]
 tools = "simple_tools.cli:cli"
@@ -51,7 +52,7 @@ addopts = [
     "--cov=src/simple_tools",
     "--cov-report=term-missing",
     "--cov-report=html",
-    "--cov-fail-under=70"
+    "--cov-fail-under=85"
 ]
 testpaths        = ["tests"]
 python_files     = "test_*.py"
@@ -60,8 +61,18 @@ python_functions = "test_*"
 filterwarnings = [
     "error::DeprecationWarning",
     "error::PendingDeprecationWarning",
-    "ignore::DeprecationWarning:logfire.*"
+    "ignore::DeprecationWarning:logfire.*",
+    "ignore:.*coroutine.*was never awaited.*:RuntimeWarning"
 ]
+# 添加pytest标记定义
+markers = [
+    "asyncio: marks tests as async (deselect with '-m \"not asyncio\"')",
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+    "unit: marks tests as unit tests"
+]
+# 设置asyncio自动模式
+asyncio_mode = "auto"
 
 # -------------------------  Coverage 配置  -------------------------
 [tool.coverage.run]
@@ -75,7 +86,7 @@ omit = [
 ]
 
 [tool.coverage.report]
-fail_under   = 70
+fail_under   = 85
 precision    = 1
 show_missing = true
 skip_empty   = true
@@ -112,7 +123,7 @@ line-length = 88
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "UP", "C90", "D"]
-ignore = ["D203", "D213"]
+ignore = ["D203", "D213", "D400", "D415"]  # D400/D415: 允许中文文档字符串使用中文句号
 # -------------------------  mypy 配置  -------------------------
 [tool.mypy]                        # ← 新增
 python_version        = "3.13"

@@ -117,7 +117,7 @@ jobs:
               --cov=./src/simple_tools \
               --cov-report=xml \
               --cov-report=term-missing \
-              --cov-fail-under=70
+              --cov-fail-under=85
 
       - name: ☁️ Upload coverage artifact
         if: always()

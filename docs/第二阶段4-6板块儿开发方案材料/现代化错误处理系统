@@ -1,0 +1,297 @@
+# 现代化错误处理系统
+
+*文件位置: `src/simple_tools/utils/errors.py`*
+*预计代码量: ~100行*
+
+## 系统概述
+
+利用 Python 3.13 的 `match/case` 语句和 Pydantic v2 的 `computed_field` 特性，构建一个友好、智能的错误处理系统。
+
+## 核心功能
+
+1. **智能错误分类** - 使用 match/case 进行错误模式匹配
+2. **动态建议生成** - 基于错误类型生成恢复建议
+3. **结构化错误信息** - 便于 Logfire 分析和监控
+4. **批量错误收集** - 支持批量操作的错误汇总
+
+## 实现代码
+
+```python
+"""现代化错误处理系统 - 利用 Python 3.13 和 Pydantic v2 特性"""
+
+from typing import Any, Optional
+from pathlib import Path
+from datetime import datetime
+from pydantic import BaseModel, computed_field
+import click
+import logfire
+
+
+class ErrorContext(BaseModel):
+    """错误上下文信息"""
+    file_path: Optional[Path] = None
+    operation: Optional[str] = None
+    details: dict[str, Any] = {}
+
+
+class ToolError(click.ClickException):
+    """增强的工具错误类"""
+
+    def __init__(
+        self,
+        message: str,
+        error_code: str,
+        context: Optional[ErrorContext] = None
+    ):
+        super().__init__(message)
+        self.error_code = error_code
+        self.context = context or ErrorContext()
+        self._suggestions: list[str] = []
+
+    @property
+    def suggestions(self) -> list[str]:
+        """基于错误类型动态生成建议"""
+        if self._suggestions:
+            return self._suggestions
+
+        # 使用 Python 3.13 的 match/case
+        match self.error_code:
+            case "FILE_NOT_FOUND":
+                self._suggestions = [
+                    "检查文件路径是否正确",
+                    "使用 'tools list' 查看可用文件",
+                    "确保文件名没有拼写错误"
+                ]
+            case "PERMISSION_DENIED":
+                self._suggestions = [
+                    "尝试使用 sudo 运行命令",
+                    f"检查文件权限：ls -la {self.context.file_path}",
+                    "确保你有读写权限"
+                ]
+            case "DISK_FULL":
+                self._suggestions = [
+                    "清理不需要的文件释放空间",
+                    "使用 'df -h' 查看磁盘使用情况",
+                    "选择其他有足够空间的目录"
+                ]
+            case "ENCODING_ERROR":
+                self._suggestions = [
+                    "该文件可能不是文本文件",
+                    "使用 'file' 命令检查文件类型",
+                    "尝试指定正确的编码格式"
+                ]
+            case _:
+                self._suggestions = ["查看详细错误信息", "检查 Logfire 日志"]
+
+        return self._suggestions
+
+    def format_message(self) -> str:
+        """格式化错误信息，覆盖 Click 的默认格式"""
+        lines = [f"❌ 错误 [{self.error_code}]: {self.message}"]
+
+        if self.context.file_path:
+            lines.append(f"📁 文件: {self.context.file_path}")
+
+        if self.context.operation:
+            lines.append(f"🔧 操作: {self.context.operation}")
+
+        if self.suggestions:
+            lines.append("\n💡 建议:")
+            for suggestion in self.suggestions:
+                lines.append(f"  • {suggestion}")
+
+        return "\n".join(lines)
+
+
+def handle_errors(operation: str):
+    """现代化的错误处理装饰器"""
+    def decorator(func):
+        def wrapper(*args, **kwargs):
+            try:
+                with logfire.span(f"operation_{operation}") as span:
+                    result = func(*args, **kwargs)
+                    span.set_attribute("status", "success")
+                    return result
+
+            except FileNotFoundError as e:
+                context = ErrorContext(
+                    file_path=Path(e.filename) if hasattr(e, 'filename') else None,
+                    operation=operation
+                )
+                error = ToolError("找不到指定的文件或目录", "FILE_NOT_FOUND", context)
+                logfire.error(
+                    "文件未找到",
+                    attributes={"error_code": "FILE_NOT_FOUND", "path": str(context.file_path)}
+                )
+                raise error
+
+            except PermissionError as e:
+                context = ErrorContext(
+                    file_path=Path(e.filename) if hasattr(e, 'filename') else None,
+                    operation=operation
+                )
+                error = ToolError("没有访问权限", "PERMISSION_DENIED", context)
+                logfire.error(
+                    "权限拒绝",
+                    attributes={"error_code": "PERMISSION_DENIED", "path": str(context.file_path)}
+                )
+                raise error
+
+            except OSError as e:
+                # 使用 match/case 处理不同的 OS 错误
+                match e.errno:
+                    case 28:  # ENOSPC
+                        raise ToolError("磁盘空间不足", "DISK_FULL")
+                    case 30:  # Read-only file system
+                        raise ToolError("文件系统只读", "READONLY_FS")
+                    case _:
+                        logfire.error(
+                            f"未知 OS 错误: {e.errno}",
+                            attributes={"errno": e.errno, "error": str(e)}
+                        )
+                        raise
+
+            except UnicodeDecodeError:
+                raise ToolError(
+                    "文件编码错误",
+                    "ENCODING_ERROR",
+                    ErrorContext(operation=operation)
+                )
+
+        return wrapper
+    return decorator
+
+
+class BatchErrorCollector:
+    """批量操作错误收集器"""
+
+    def __init__(self):
+        self.errors: list[dict[str, Any]] = []
+        self.success_count = 0
+
+    def record_error(self, item: Any, error: Exception):
+        """记录错误信息"""
+        error_info = {
+            "item": str(item),
+            "error_type": type(error).__name__,
+            "message": str(error),
+            "timestamp": datetime.now().isoformat()
+        }
+
+        # 如果是 ToolError，记录更多信息
+        if isinstance(error, ToolError):
+            error_info["code"] = error.error_code
+            error_info["suggestions"] = error.suggestions
+
+        self.errors.append(error_info)
+        logfire.error("批量操作错误", attributes=error_info)
+
+    def record_success(self):
+        """记录成功操作"""
+        self.success_count += 1
+
+    def get_summary(self) -> dict[str, Any]:
+        """获取错误汇总"""
+        return {
+            "total": self.success_count + len(self.errors),
+            "success": self.success_count,
+            "failed": len(self.errors),
+            "errors": self.errors
+        }
+
+    def format_summary(self) -> str:
+        """格式化错误汇总 - 友好的显示格式"""
+        if not self.errors:
+            return f"✅ 全部成功：{self.success_count} 个项目"
+
+        lines = [
+            f"\n📊 处理汇总:",
+            f"  • 成功: {self.success_count}",
+            f"  • 失败: {len(self.errors)}",
+            f"\n❌ 错误详情:"
+        ]
+
+        # 按错误类型分组
+        error_groups: dict[str, list[dict]] = {}
+        for error in self.errors:
+            error_type = error.get("code", error["error_type"])
+            if error_type not in error_groups:
+                error_groups[error_type] = []
+            error_groups[error_type].append(error)
+
+        for error_type, errors in error_groups.items():
+            lines.append(f"\n  [{error_type}] {len(errors)} 个错误:")
+            for error in errors[:3]:  # 只显示前3个
+                lines.append(f"    • {error['item']}: {error['message']}")
+            if len(errors) > 3:
+                lines.append(f"    ... 还有 {len(errors) - 3} 个类似错误")
+
+        return "\n".join(lines)
+```
+
+## 使用示例
+
+### 1. 应用错误处理装饰器
+
+```python
+from simple_tools.utils.errors import handle_errors
+
+@handle_errors("list_files")
+def list_files(directory: str) -> list[dict]:
+    """列出目录文件 - 自动处理常见错误"""
+    # 原有代码保持不变
+    # 装饰器会自动捕获并转换错误
+    ...
+```
+
+### 2. 批量操作错误收集
+
+```python
+from simple_tools.utils.errors import BatchErrorCollector
+
+def batch_rename_files(files: list[Path]):
+    """批量重命名 - 收集所有错误"""
+    collector = BatchErrorCollector()
+
+    for file in files:
+        try:
+            rename_file(file)
+            collector.record_success()
+        except Exception as e:
+            collector.record_error(file, e)
+
+    # 显示友好的错误汇总
+    click.echo(collector.format_summary())
+```
+
+### 3. 手动抛出友好错误
+
+```python
+from simple_tools.utils.errors import ToolError, ErrorContext
+
+# 当需要手动抛出错误时
+if not config_file.exists():
+    context = ErrorContext(
+        file_path=config_file,
+        operation="load_config"
+    )
+    raise ToolError(
+        "配置文件不存在",
+        "CONFIG_NOT_FOUND",
+        context
+    )
+```
+
+## 集成要点
+
+1. **最小化修改** - 只需添加装饰器，原有代码逻辑不变
+2. **统一错误格式** - 所有工具使用相同的错误展示格式
+3. **保留原有行为** - 仍然抛出 Click 异常，保持兼容性
+4. **增强监控** - 自动记录到 Logfire，便于分析
+
+## 预期效果
+
+- 用户看到的错误信息更友好，有明确的解决建议
+- 批量操作不会因单个错误中断，而是收集所有错误
+- Logfire 中的错误日志更结构化，便于分析和监控
+- 代码更简洁，错误处理逻辑集中管理

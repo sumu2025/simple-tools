@@ -1,15 +1,18 @@
-"""文件处理工具 - 提供文件列表、查找等功能."""
+"""文件工具模块 - 集成现代化错误处理系统."""
 
 import os
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Optional
 
 import click
 import logfire
 
-from simple_tools._typing import argument, command, option, pass_context  # 新增
+from simple_tools._typing import argument, command, option, pass_context
 
+from ..utils.errors import ErrorContext, ToolError, format_friendly_error, handle_errors
 from ..utils.formatter import FileListData, format_output
+from ..utils.progress import ProgressTracker  # 新增进度显示支持
 
 
 def format_size(size_bytes: int) -> str:
@@ -41,6 +44,57 @@ def format_time(timestamp: float) -> str:
     return datetime.fromtimestamp(timestamp).strftime("%Y-%m-%d %H:%M:%S")
 
 
+def _scan_directory_with_progress(
+    path: str, show_hidden: bool = False
+) -> list[dict[str, Any]]:
+    """扫描目录并在大量文件时显示进度."""
+    path_obj = Path(path)
+
+    # 先快速统计文件数量（仅用于判断是否需要进度条）
+    try:
+        all_items = list(path_obj.iterdir())
+        if not show_hidden:
+            all_items = [item for item in all_items if not item.name.startswith(".")]
+
+        # 如果文件数量超过1000个，显示进度条
+        if len(all_items) > 1000:
+            items_info = []
+            with ProgressTracker(
+                total=len(all_items), description="扫描文件"
+            ) as progress:
+                for item in all_items:
+                    is_dir = item.is_dir()
+                    info = {"name": item.name, "is_dir": is_dir, "path": str(item)}
+                    items_info.append(info)
+                    progress.update(1)
+            return items_info
+        else:
+            # 文件数量较少，直接处理
+            items_info = []
+            for item in all_items:
+                is_dir = item.is_dir()
+                info = {"name": item.name, "is_dir": is_dir, "path": str(item)}
+                items_info.append(info)
+            return items_info
+    except PermissionError as e:
+        # 如果无法访问目录，抛出 ToolError
+        raise ToolError(
+            f"没有权限访问目录 '{path}'",
+            error_code="PERMISSION_DENIED",
+            context=ErrorContext(operation="列出目录内容", file_path=path),
+            original_error=e,
+        )
+    except OSError as e:
+        # 其他系统错误
+        raise ToolError(
+            f"访问目录失败 '{path}'",
+            error_code="OPERATION_FAILED",
+            context=ErrorContext(operation="列出目录内容", file_path=path),
+            original_error=e,
+        )
+
+
+@handle_errors("列出目录内容")
 def list_files(
     directory: str, show_hidden: bool = False, show_details: bool = False
 ) -> list[dict[str, Any]]:
@@ -63,19 +117,36 @@ def list_files(
     ):
         items_info = []
 
-        try:
-            # 检查目录是否存在
-            if not os.path.exists(directory):
-                logfire.error(f"目录不存在: {directory}")
-                raise click.ClickException(f"错误：目录 '{directory}' 不存在")
+        # 检查目录是否存在
+        if not os.path.exists(directory):
+            raise ToolError(
+                f"目录 '{directory}' 不存在",
+                error_code="DIRECTORY_NOT_FOUND",
+                context=ErrorContext(operation="列出目录内容", file_path=directory),
+            )
 
-            # 检查是否为目录
-            if not os.path.isdir(directory):
-                logfire.error(f"路径不是目录: {directory}")
-                raise click.ClickException(f"错误：'{directory}' 不是一个目录")
+        # 检查是否为目录
+        if not os.path.isdir(directory):
+            raise ToolError(
+                f"路径 '{directory}' 不是一个目录",
+                error_code="NOT_A_DIRECTORY",
+                context=ErrorContext(operation="列出目录内容", file_path=directory),
+            )
 
+        # 使用带进度显示的目录扫描
+        if not show_details:
+            items_info = _scan_directory_with_progress(directory, show_hidden)
+        else:
             # 获取目录内容
-            items = os.listdir(directory)
+            try:
+                items = os.listdir(directory)
+            except PermissionError as e:
+                raise ToolError(
+                    f"没有权限访问目录 '{directory}'",
+                    error_code="PERMISSION_DENIED",
+                    context=ErrorContext(operation="列出目录内容", file_path=directory),
+                    original_error=e,
+                )
 
             # 过滤隐藏文件
             if not show_hidden:
@@ -86,7 +157,7 @@ def list_files(
                 key=lambda x: (not os.path.isdir(os.path.join(directory, x)), x.lower())
             )
 
-            # 收集文件信息
+            # 收集文件信息（带详细信息时可能较慢，但通常文件数不会太多）
             for item in items:
                 item_path = os.path.join(directory, item)
                 is_dir = os.path.isdir(item_path)
@@ -94,26 +165,31 @@ def list_files(
                 info = {"name": item, "is_dir": is_dir, "path": item_path}
 
                 if show_details and not is_dir:
-                    size = os.path.getsize(item_path)
-                    info["size"] = size
-                    info["size_formatted"] = format_size(size)
-                    modified_time: float = float(os.path.getmtime(item_path))
-                    info["modified"] = modified_time
-                    info["modified_formatted"] = format_time(modified_time)
+                    try:
+                        size = os.path.getsize(item_path)
+                        info["size"] = size
+                        info["size_formatted"] = format_size(size)
+                        modified_time: float = float(os.path.getmtime(item_path))
+                        info["modified"] = modified_time
+                        info["modified_formatted"] = format_time(modified_time)
+                    except (OSError, PermissionError) as e:
+                        # 对于无法访问的文件，记录错误但继续处理其他文件
+                        logfire.warning(
+                            f"无法获取文件详情: {item_path}, 错误: {str(e)}"
+                        )
+                        info["size"] = 0
+                        info["size_formatted"] = "未知"
+                        info["modified_formatted"] = "未知"
 
                 items_info.append(info)
 
-            logfire.info(
-                f"列出目录内容成功: {directory}",
-                attributes={"item_count": len(items_info)},
-            )
+        # 排序：目录在前，按名称排序
+        items_info.sort(key=lambda x: (not x["is_dir"], x["name"].lower()))
 
-        except PermissionError:
-            logfire.error(f"权限错误: {directory}")
-            raise click.ClickException(f"错误：没有权限访问目录 '{directory}'")
-        except Exception as e:
-            logfire.error(f"列出目录内容失败: {str(e)}")
-            raise click.ClickException(f"错误：{str(e)}")
+        logfire.info(
+            f"列出目录内容成功: {directory}",
+            attributes={"item_count": len(items_info)},
+        )
 
         return items_info
 
@@ -259,5 +335,23 @@ def list_cmd(
         # 格式化输出
         _format_list_output(items, path, output_format)
 
+        # 记录到操作历史
+        from ..utils.smart_interactive import operation_history
+
+        operation_history.add(
+            "list",
+            {
+                "path": path,
+                "all": show_hidden,
+                "long": show_details,
+                "format": output_format,
+            },
+            {"files_count": len(items)},
+        )
+
+    except ToolError as e:
+        # 使用友好的错误格式化
+        error_msg = format_friendly_error(e)
+        click.echo(error_msg, err=True)
     except click.ClickException as e:
         click.echo(str(e), err=True)

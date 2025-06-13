@@ -256,7 +256,8 @@ class Formatter:
         """CSV格式的整理结果."""
         output = StringIO()
         writer = csv.DictWriter(
-            output, fieldnames=["source_path", "target_path", "category", "status"]
+            output,
+            fieldnames=["source_path", "target_path", "category", "status", "error"],
         )
         writer.writeheader()
         writer.writerows(results)

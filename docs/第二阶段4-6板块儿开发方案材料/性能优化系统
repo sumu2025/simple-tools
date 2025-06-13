@@ -1,0 +1,357 @@
+# 性能优化系统
+
+*文件位置: `src/simple_tools/utils/optimized_ops.py`*
+*预计代码量: ~100行*
+
+## 系统概述
+
+基于 Logfire 监控数据，针对已发现的性能瓶颈进行优化。利用 Python 3.13 的性能改进和现代最佳实践。
+
+## 核心功能
+
+1. **大文件分块处理** - 优化内存使用
+2. **高效目录扫描** - 使用 os.scandir
+3. **智能哈希计算** - 分块读取，避免内存溢出
+4. **文本流式处理** - 处理大文本文件
+
+## 实现代码
+
+```python
+"""性能优化工具 - 基于监控数据的针对性优化"""
+
+import os
+import hashlib
+from pathlib import Path
+from typing import Iterator, Optional, BinaryIO
+from functools import lru_cache
+import logfire
+from pydantic import BaseModel, Field
+
+
+class FileStats(BaseModel):
+    """文件统计信息"""
+    path: Path
+    size: int
+    is_dir: bool
+    modified: float
+
+    @property
+    def size_category(self) -> str:
+        """文件大小分类"""
+        if self.size < 1024 * 1024:  # < 1MB
+            return "small"
+        elif self.size < 100 * 1024 * 1024:  # < 100MB
+            return "medium"
+        else:
+            return "large"
+
+
+def calculate_file_hash(
+    file_path: Path,
+    algorithm: str = "md5",
+    chunk_size: int = 8192
+) -> str:
+    """优化的文件哈希计算
+
+    针对大文件使用分块读取，避免内存占用过高
+    """
+    with logfire.span("calculate_hash", attributes={
+        "file": str(file_path),
+        "size": file_path.stat().st_size,
+        "algorithm": algorithm
+    }) as span:
+        # 根据文件大小选择策略
+        file_size = file_path.stat().st_size
+        span.set_attribute("size_category", _get_size_category(file_size))
+
+        if file_size < 1024 * 1024:  # 小于 1MB，一次性读取
+            with open(file_path, 'rb') as f:
+                content = f.read()
+                if algorithm == "md5":
+                    return hashlib.md5(content).hexdigest()
+                elif algorithm == "sha256":
+                    return hashlib.sha256(content).hexdigest()
+
+        # 大文件分块读取
+        hash_obj = hashlib.new(algorithm)
+        bytes_read = 0
+
+        with open(file_path, 'rb') as f:
+            while chunk := f.read(chunk_size):
+                hash_obj.update(chunk)
+                bytes_read += len(chunk)
+
+                # 每 100MB 记录一次进度
+                if bytes_read % (100 * 1024 * 1024) == 0:
+                    span.set_attribute("progress_mb", bytes_read // (1024 * 1024))
+
+        return hash_obj.hexdigest()
+
+
+def scan_directory_fast(
+    path: Path,
+    pattern: str = "*",
+    recursive: bool = True,
+    skip_hidden: bool = True
+) -> Iterator[FileStats]:
+    """高效的目录扫描
+
+    使用 os.scandir 替代 os.listdir，减少系统调用
+    """
+    with logfire.span("scan_directory", attributes={
+        "path": str(path),
+        "pattern": pattern,
+        "recursive": recursive
+    }) as span:
+        file_count = 0
+        dir_count = 0
+
+        try:
+            # 使用 scandir 获取更多信息，减少 stat 调用
+            with os.scandir(path) as entries:
+                for entry in entries:
+                    # 跳过隐藏文件
+                    if skip_hidden and entry.name.startswith('.'):
+                        continue
+
+                    # 匹配模式
+                    if pattern != "*" and not Path(entry.name).match(pattern):
+                        continue
+
+                    # 创建文件统计信息
+                    try:
+                        stat = entry.stat(follow_symlinks=False)
+                        file_stat = FileStats(
+                            path=Path(entry.path),
+                            size=stat.st_size if not entry.is_dir() else 0,
+                            is_dir=entry.is_dir(),
+                            modified=stat.st_mtime
+                        )
+
+                        yield file_stat
+
+                        if entry.is_dir():
+                            dir_count += 1
+                            # 递归扫描子目录
+                            if recursive:
+                                yield from scan_directory_fast(
+                                    Path(entry.path),
+                                    pattern,
+                                    recursive,
+                                    skip_hidden
+                                )
+                        else:
+                            file_count += 1
+
+                    except (OSError, PermissionError):
+                        # 跳过无权限的文件
+                        continue
+
+        except (OSError, PermissionError) as e:
+            logfire.error(f"扫描目录失败: {e}")
+
+        span.set_attribute("file_count", file_count)
+        span.set_attribute("dir_count", dir_count)
+
+
+def process_large_text_file(
+    file_path: Path,
+    processor: callable,
+    encoding: str = "utf-8",
+    buffer_size: int = 1024 * 1024  # 1MB
+) -> Iterator[Any]:
+    """流式处理大文本文件
+
+    避免一次性加载整个文件到内存
+    """
+    with logfire.span("process_text_file", attributes={
+        "file": str(file_path),
+        "size": file_path.stat().st_size
+    }):
+        with open(file_path, 'r', encoding=encoding, buffering=buffer_size) as f:
+            line_count = 0
+            for line in f:
+                line_count += 1
+                result = processor(line)
+                if result is not None:
+                    yield result
+
+                # 每 10000 行记录一次
+                if line_count % 10000 == 0:
+                    logfire.debug(f"已处理 {line_count} 行")
+
+
+@lru_cache(maxsize=1024)
+def _get_size_category(size: int) -> str:
+    """缓存文件大小分类判断"""
+    if size < 1024 * 1024:
+        return "small"
+    elif size < 100 * 1024 * 1024:
+        return "medium"
+    else:
+        return "large"
+
+
+class OptimizedFileComparator:
+    """优化的文件比较器
+
+    只对相同大小的文件计算哈希
+    """
+
+    def __init__(self):
+        self.size_groups: dict[int, list[Path]] = {}
+
+    def add_file(self, file_path: Path):
+        """添加文件到比较器"""
+        size = file_path.stat().st_size
+        if size not in self.size_groups:
+            self.size_groups[size] = []
+        self.size_groups[size].append(file_path)
+
+    def find_duplicates(self) -> Iterator[list[Path]]:
+        """查找重复文件"""
+        with logfire.span("find_duplicates", attributes={
+            "total_groups": len(self.size_groups)
+        }):
+            # 只处理有多个文件的大小组
+            for size, files in self.size_groups.items():
+                if len(files) < 2:
+                    continue
+
+                # 计算哈希
+                hash_groups: dict[str, list[Path]] = {}
+                for file_path in files:
+                    try:
+                        file_hash = calculate_file_hash(file_path)
+                        if file_hash not in hash_groups:
+                            hash_groups[file_hash] = []
+                        hash_groups[file_hash].append(file_path)
+                    except Exception as e:
+                        logfire.error(f"计算哈希失败: {file_path} - {e}")
+
+                # 返回重复组
+                for hash_value, group in hash_groups.items():
+                    if len(group) > 1:
+                        yield group
+
+
+class StreamingTextReplacer:
+    """流式文本替换器
+
+    适用于大文件的文本替换
+    """
+
+    def __init__(self, old_text: str, new_text: str):
+        self.old_text = old_text
+        self.new_text = new_text
+        self.buffer = ""
+
+    def process_chunk(self, chunk: str) -> tuple[str, int]:
+        """处理文本块，返回替换后的文本和替换次数"""
+        # 将上次的缓冲区与新块合并
+        text = self.buffer + chunk
+
+        # 保留可能跨块的部分
+        if len(self.old_text) > 1:
+            self.buffer = text[-(len(self.old_text) - 1):]
+            text = text[:-(len(self.old_text) - 1)]
+        else:
+            self.buffer = ""
+
+        # 执行替换
+        count = text.count(self.old_text)
+        if count > 0:
+            text = text.replace(self.old_text, self.new_text)
+
+        return text, count
+
+    def flush(self) -> tuple[str, int]:
+        """处理剩余的缓冲区"""
+        if self.buffer:
+            count = self.buffer.count(self.old_text)
+            text = self.buffer.replace(self.old_text, self.new_text)
+            self.buffer = ""
+            return text, count
+        return "", 0
+```
+
+## 使用示例
+
+### 1. 优化的文件哈希计算
+
+```python
+from simple_tools.utils.optimized_ops import calculate_file_hash
+
+# 自动根据文件大小选择最优策略
+hash_value = calculate_file_hash(
+    Path("large_file.iso"),
+    algorithm="sha256"
+)
+```
+
+### 2. 高效目录扫描
+
+```python
+from simple_tools.utils.optimized_ops import scan_directory_fast
+
+# 使用生成器，避免一次性加载所有文件
+for file_stat in scan_directory_fast(Path("/home/user"), pattern="*.py"):
+    print(f"{file_stat.path}: {file_stat.size}")
+```
+
+### 3. 重复文件查找优化
+
+```python
+from simple_tools.utils.optimized_ops import OptimizedFileComparator
+
+comparator = OptimizedFileComparator()
+
+# 添加文件
+for file_stat in scan_directory_fast(Path(".")):
+    if not file_stat.is_dir:
+        comparator.add_file(file_stat.path)
+
+# 查找重复（只对相同大小的文件计算哈希）
+for duplicate_group in comparator.find_duplicates():
+    print(f"重复文件组: {duplicate_group}")
+```
+
+### 4. 大文件文本替换
+
+```python
+from simple_tools.utils.optimized_ops import StreamingTextReplacer
+
+replacer = StreamingTextReplacer("old_text", "new_text")
+
+# 流式处理大文件
+with open("large_file.txt", 'r') as f_in:
+    with open("output.txt", 'w') as f_out:
+        for chunk in iter(lambda: f_in.read(1024 * 1024), ''):
+            replaced, count = replacer.process_chunk(chunk)
+            f_out.write(replaced)
+
+        # 处理最后的缓冲区
+        final, count = replacer.flush()
+        f_out.write(final)
+```
+
+## 集成要点
+
+1. **按需替换** - 只在处理大文件时使用优化版本
+2. **保持接口一致** - 优化函数的接口与原函数兼容
+3. **监控对比** - 使用 Logfire 对比优化前后的性能
+4. **渐进式应用** - 先在一个工具中试用，效果好再推广
+
+## 性能提升预期
+
+- **文件哈希**: 大文件内存占用从 O(n) 降到 O(1)
+- **目录扫描**: 使用 scandir 减少 50% 的系统调用
+- **重复文件**: 避免对不同大小文件计算哈希，节省 80% 计算
+- **文本处理**: 支持 GB 级别文本文件处理
+
+## 注意事项
+
+- 优化只针对已证明的瓶颈
+- 小文件使用简单方法反而更快
+- 保持代码可读性，不过度优化
+- 充分测试边界情况

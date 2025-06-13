@@ -1,6 +1,5 @@
 """文件工具单元测试 - 测试list_files功能."""
 
-import os
 from pathlib import Path
 from typing import Any
 
@@ -131,40 +130,42 @@ class TestListFiles:
 
     def test_list_nonexistent_directory(self) -> None:
         """测试不存在的目录."""
-        from click import ClickException
+        from simple_tools.utils.errors import ToolError
 
-        with pytest.raises(ClickException) as exc_info:
+        with pytest.raises(ToolError) as exc_info:
             list_files("/nonexistent/directory")
 
         assert "不存在" in str(exc_info.value)
 
     def test_list_file_not_directory(self, temp_dir: Path) -> None:
         """测试路径不是目录的情况."""
-        from click import ClickException
+        from simple_tools.utils.errors import ToolError
 
         # 创建一个文件
         file_path = temp_dir / "not_a_dir.txt"
         file_path.write_text("content")
 
-        with pytest.raises(ClickException) as exc_info:
+        with pytest.raises(ToolError) as exc_info:
             list_files(str(file_path))
 
         assert "不是一个目录" in str(exc_info.value)
 
     def test_list_permission_error(self, temp_dir: Path, monkeypatch: Any) -> None:
         """测试权限错误处理."""
-        from click import ClickException
+        from simple_tools.utils.errors import ToolError
 
-        # 模拟权限错误
-        def mock_listdir(path: str) -> list[str]:
+        # 模拟 Path.iterdir() 权限错误
+        def mock_iterdir(self: Path) -> list[Path]:
             raise PermissionError("Permission denied")
 
-        monkeypatch.setattr(os, "listdir", mock_listdir)
+        monkeypatch.setattr(Path, "iterdir", mock_iterdir)
 
-        with pytest.raises(ClickException) as exc_info:
+        with pytest.raises(ToolError) as exc_info:
             list_files(str(temp_dir))
 
-        assert "没有权限访问" in str(exc_info.value)
+        # 验证错误信息
+        assert exc_info.value.error_code == "PERMISSION_DENIED"
+        assert "权限" in exc_info.value.message
 
 
 class TestListCommand:
