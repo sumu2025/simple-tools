@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "sumu-simple-tools"         # 用新包名
-version = "0.2.0"
+version = "0.3.0"
 description = "一个简单实用的Python工具集，专注解决日常工作中的实际问题"
 authors = ["peacock <weipeacock@gmail.com>"]
 license = "MIT"
@@ -25,6 +25,10 @@ click    = "^8.2.1"             # 8.2.1 为 8.x 最新，支持 3.13
 pydantic = "^2.11.5"            # 2.11.5 为 v2 系列最新；享受 dataclass-like TypedDict
 logfire  = "^3.16.0"            # 3.16.0 是 2025-05-14 最新版，引入显式 configure 行为
 pyyaml   = "^6.0"
+httpx    = {extras = ["http2"], version = "^0.28.1"}            # 异步HTTP客户端，用于AI API调用
+pydantic-settings = "^2.9.1"
+python-docx = "^1.1.2"
+pypdf = "^5.6.0"
 [tool.poetry.group.dev.dependencies]
 pytest      = "^8.3.5"          # 与 CI 一致；8.3.5 为 2025-05-26 发布
 pytest-cov  = "^6.1.1"          # Pytest-cov 最新
@@ -36,6 +40,7 @@ mypy        = "^1.15.0"         # 1.15.0 首次官方支持 Python 3.13
 types-click = "^7.1.8"          # click 的类型存根，消除 stub 警告
 types-pyyaml = "^6.0.12.20250516"
 pytest-asyncio = "^1.0.0"
+pytest-mock = "^3.14.0"
 
 [tool.poetry.scripts]
 tools = "simple_tools.cli:cli"
@@ -73,6 +78,8 @@ markers = [
 ]
 # 设置asyncio自动模式
 asyncio_mode = "auto"
+# 设置默认的fixture loop scope
+asyncio_default_fixture_loop_scope = "function"
 
 # -------------------------  Coverage 配置  -------------------------
 [tool.coverage.run]
