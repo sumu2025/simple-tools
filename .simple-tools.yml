@@ -18,3 +18,23 @@ tools:
 
   organize:
     mode: type          # 默认按类型整理
+
+ai:
+  enabled: true # 或者 false，根据您的需要设置
+  provider: deepseek
+  api_key: ${DEEPSEEK_API_KEY}  # 建议从环境变量读取API Key
+  model: deepseek-chat
+  max_tokens: 1000
+  temperature: 0.7
+  cache_ttl: 3600 # 缓存时间（秒）
+
+  # 功能开关
+  features:
+    smart_classify: true
+    auto_summarize: true
+    content_analysis: true
+
+  # 成本控制
+  limits:
+    daily_requests: 1000
+    monthly_budget: 50  # 人民币

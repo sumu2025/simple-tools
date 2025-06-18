@@ -50,11 +50,33 @@ def _scan_directory_with_progress(
     """扫描目录并在大量文件时显示进度."""
     path_obj = Path(path)
 
+    # 默认排除的目录（不递归扫描，所以只在当前层级检查）
+    excluded_dirs = {
+        ".venv",
+        "venv",
+        "env",  # 虚拟环境
+        ".git",
+        ".svn",
+        ".hg",  # 版本控制
+        "__pycache__",
+        ".pytest_cache",
+        ".mypy_cache",  # 缓存
+        "node_modules",
+        "dist",
+        "build",  # 构建目录
+        ".idea",
+        ".vscode",  # IDE配置
+        "site-packages",  # Python包目录
+    }
+
     # 先快速统计文件数量（仅用于判断是否需要进度条）
     try:
         all_items = list(path_obj.iterdir())
         if not show_hidden:
             all_items = [item for item in all_items if not item.name.startswith(".")]
+
+        # 过滤掉排除的目录
+        all_items = [item for item in all_items if item.name not in excluded_dirs]
 
         # 如果文件数量超过1000个，显示进度条
         if len(all_items) > 1000:
@@ -133,6 +155,25 @@ def list_files(
                 context=ErrorContext(operation="列出目录内容", file_path=directory),
             )
 
+        # 默认排除的目录
+        excluded_dirs = {
+            ".venv",
+            "venv",
+            "env",  # 虚拟环境
+            ".git",
+            ".svn",
+            ".hg",  # 版本控制
+            "__pycache__",
+            ".pytest_cache",
+            ".mypy_cache",  # 缓存
+            "node_modules",
+            "dist",
+            "build",  # 构建目录
+            ".idea",
+            ".vscode",  # IDE配置
+            "site-packages",  # Python包目录
+        }
+
         # 使用带进度显示的目录扫描
         if not show_details:
             items_info = _scan_directory_with_progress(directory, show_hidden)
@@ -151,6 +192,9 @@ def list_files(
             # 过滤隐藏文件
             if not show_hidden:
                 items = [item for item in items if not item.startswith(".")]
+
+            # 过滤排除的目录
+            items = [item for item in items if item not in excluded_dirs]
 
             # 排序：目录在前，按名称排序
             items.sort(

@@ -1,0 +1,111 @@
+"""简单的补充测试以提升覆盖率"""
+
+import pytest
+from pathlib import Path
+
+from simple_tools.core.file_tool import format_size, format_time
+from simple_tools.core.duplicate_finder import format_size as dup_format_size
+from simple_tools.config import PROJECT_ROOT
+
+
+def test_basic_utilities():
+    """测试基本工具函数"""
+    # 测试 format_size
+    assert format_size(0) == "0 B"
+    assert format_size(1024) == "1.0 KB"
+    assert format_size(1024 * 1024) == "1.0 MB"
+    assert format_size(1536) == "1.5 KB"
+
+    # 测试 duplicate_finder 的 format_size
+    assert dup_format_size(0) == "0 B"
+    assert dup_format_size(2048) == "2.0 KB"
+
+    # 测试 format_time
+    import time
+    current_time = time.time()
+    formatted = format_time(current_time)
+    assert ":" in formatted  # 应该包含时间分隔符
+    assert len(formatted) == 19  # YYYY-MM-DD HH:MM:SS 格式
+
+    # 测试 config.py
+    assert PROJECT_ROOT is not None
+    assert isinstance(PROJECT_ROOT, Path)
+
+
+def test_text_replace_simple_functions():
+    """测试 text_replace 的简单函数"""
+    from simple_tools.core.text_replace import _format_pattern_display
+
+    # 测试正常情况
+    old, new = _format_pattern_display("old:new")
+    assert old == "old"
+    assert new == "new"
+
+    # 测试没有冒号
+    old, new = _format_pattern_display("noColon")
+    assert old == "noColon"
+    assert new == ""
+
+    # 测试多个冒号
+    old, new = _format_pattern_display("a:b:c")
+    assert old == "a"
+    assert new == "b:c"
+
+
+def test_error_utilities():
+    """测试错误处理工具"""
+    from simple_tools.utils.errors import ErrorContext, ToolError, format_friendly_error
+
+    # 测试 ErrorContext
+    context = ErrorContext()
+    assert context.operation is None
+    assert context.file_path is None
+    assert context.details == {}
+
+    # 测试带参数的 ErrorContext
+    context = ErrorContext(
+        operation="test_op",
+        file_path="/test/path",
+        details={"key": "value"}
+    )
+    assert context.operation == "test_op"
+    assert context.file_path == "/test/path"
+    assert context.details["key"] == "value"
+
+    # 测试 ToolError
+    error = ToolError("测试错误", "TEST_ERROR")
+    assert str(error) == "测试错误"
+    assert error.error_code == "TEST_ERROR"
+
+    # 测试 format_friendly_error
+    formatted = format_friendly_error(error)
+    assert "测试错误" in formatted
+    assert "TEST_ERROR" in formatted
+
+
+def test_formatter_simple():
+    """测试格式化器的简单功能"""
+    from simple_tools.utils.formatter import FileListData, format_output
+
+    # 测试空数据
+    data = FileListData(path="/test", total=0, files=[])
+
+    # JSON 输出
+    json_out = format_output(data, "json")
+    assert '"total": 0' in json_out
+    assert '"files": []' in json_out
+
+    # CSV 输出
+    csv_out = format_output(data, "csv")
+    assert "name,type,size" in csv_out
+
+    # 测试带数据
+    data = FileListData(
+        path="/test",
+        total=1,
+        files=[{"name": "test.txt", "type": "file", "size": 100}]
+    )
+
+    json_out = format_output(data, "json")
+    assert '"name": "test.txt"' in json_out
+    assert '"size": 100' in json_out

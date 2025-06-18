@@ -204,29 +204,83 @@ class BatchRename:
         if not dir_path.exists():
             raise ToolError(f"目录不存在: {directory}")
 
-        files = []
+        excluded_dirs = self._get_excluded_dirs()
 
         if config.recursive:
-            pattern = (
-                "**/*" if config.file_filter is None else f"**/{config.file_filter}"
-            )
-            for file_path in dir_path.glob(pattern):
-                if file_path.is_file():
-                    relative_path = file_path.relative_to(dir_path)
-                    if len(relative_path.parts) <= config.max_depth:
-                        files.append(file_path)
+            files = self._collect_files_recursive(dir_path, config, excluded_dirs)
         else:
-            pattern = "*" if config.file_filter is None else config.file_filter
-            for file_path in dir_path.glob(pattern):
-                if file_path.is_file():
-                    files.append(file_path)
+            files = self._collect_files_non_recursive(dir_path, config, excluded_dirs)
 
-        # 排除模式过滤
-        if config.exclude_pattern:
-            exclude_regex = re.compile(config.exclude_pattern)
-            files = [f for f in files if not exclude_regex.search(f.name)]
+        # 应用排除模式过滤
+        files = self._apply_exclude_pattern(files, config.exclude_pattern)
 
         return sorted(files)
+
+    def _get_excluded_dirs(self) -> set[str]:
+        """获取排除的目录列表."""
+        return {
+            ".venv",
+            "venv",
+            "env",  # 虚拟环境
+            ".git",
+            ".svn",
+            ".hg",  # 版本控制
+            "__pycache__",
+            ".pytest_cache",
+            ".mypy_cache",  # 缓存
+            "node_modules",
+            "dist",
+            "build",  # 构建目录
+            ".idea",
+            ".vscode",  # IDE配置
+            "site-packages",  # Python包目录
+        }
+
+    def _should_exclude_file(self, file_path: Path, excluded_dirs: set[str]) -> bool:
+        """检查是否应该排除文件."""
+        return any(excluded in file_path.parts for excluded in excluded_dirs)
+
+    def _collect_files_recursive(
+        self, dir_path: Path, config: RenameConfig, excluded_dirs: set[str]
+    ) -> list[Path]:
+        """递归收集文件."""
+        files = []
+        pattern = "**/*" if config.file_filter is None else f"**/{config.file_filter}"
+
+        for file_path in dir_path.glob(pattern):
+            if self._should_exclude_file(file_path, excluded_dirs):
+                continue
+            if file_path.is_file():
+                relative_path = file_path.relative_to(dir_path)
+                if len(relative_path.parts) <= config.max_depth:
+                    files.append(file_path)
+
+        return files
+
+    def _collect_files_non_recursive(
+        self, dir_path: Path, config: RenameConfig, excluded_dirs: set[str]
+    ) -> list[Path]:
+        """非递归收集文件."""
+        files = []
+        pattern = "*" if config.file_filter is None else config.file_filter
+
+        for file_path in dir_path.glob(pattern):
+            if self._should_exclude_file(file_path, excluded_dirs):
+                continue
+            if file_path.is_file():
+                files.append(file_path)
+
+        return files
+
+    def _apply_exclude_pattern(
+        self, files: list[Path], exclude_pattern: Optional[str]
+    ) -> list[Path]:
+        """应用排除模式过滤."""
+        if not exclude_pattern:
+            return files
+
+        exclude_regex = re.compile(exclude_pattern)
+        return [f for f in files if not exclude_regex.search(f.name)]
 
     def _generate_rename_plan(
         self, files: list[Path], config: RenameConfig

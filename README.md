@@ -120,9 +120,32 @@ tools replace \"TODO:DONE\" -e .txt -e .md
 # 跳过确认直接执行
 tools replace \"old:new\" -y
 
+# 🆕 执行前自动备份文件（推荐）
+tools replace \"old:new\" --backup --execute
+
+# 使用 AI 风险分析
+tools replace \"bug:issue\" --ai-check --execute
+
 # JSON格式输出结果
 tools replace \"old:new\" --format json > replace_results.json
 ```
+
+#### 🛡️ 备份和恢复
+文本替换支持自动备份功能，保护您的数据安全：
+
+```bash
+# 使用 --backup 选项在执行前创建备份
+tools replace \"critical:change\" --backup --execute
+
+# 备份位置：~/.simpletools-backup/replace_YYYYMMDD_HHMMSS/
+# 查看备份
+ls ~/.simpletools-backup/
+
+# 手动恢复文件
+cp ~/.simpletools-backup/replace_20250613_103000/file.txt ./file.txt
+```
+
+> 💡 **提示**：虽然有备份功能，但最好的保护是使用版本控制系统（如 Git）！
 
 ### 5. file_organizer - 智能文件自动整理
 根据文件类型或日期自动整理文件，支持自定义规则和批量处理。
@@ -320,6 +343,7 @@ tools:
 ## 📚 文档
 
 - 📖 [开发指南](docs/development.md)
+- 🛡️ [备份和恢复指南](docs/backup_restore_guide.md)
 - 🔧 [第二阶段开发总结](docs/phase2-completion-summary.md)
 - 🛠️ [工具集成指南](docs/第二阶段4-6板块儿开发方案材料/工具集成指南)
 - 📊 [性能优化文档](docs/第二阶段4-6板块儿开发方案材料/性能优化系统)
@@ -327,6 +351,19 @@ tools:
 - 🛡️ [错误处理文档](docs/第二阶段4-6板块儿开发方案材料/现代化错误处理系统)
 
 ## 📝 版本历史
+
+### v0.2.1 (2025-06-14) - 备份功能增强
+**数据安全增强版**
+
+#### 🆕 新增功能
+- 🛡️ **文本替换备份功能**：使用 `--backup` 选项在执行前自动备份文件
+- 🤖 **AI 增强改进**：高风险操作强制确认（需输入 \"YES\")
+- 💡 **推荐模式询问**：AI 提供改进建议时会询问是否使用
+
+#### 🔧 改进
+- 增强了非技术用户的数据安全保护
+- 改进了操作历史记录功能
+- 编写了详细的备份和恢复指南
 
 ### v0.2.0 (2025-06-13) - 第二阶段完成 🎉
 **现代化增强版本**

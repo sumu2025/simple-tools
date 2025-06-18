@@ -1,6 +1,9 @@
 """文本替换工具模块."""
 
+import json
 import os
+import shutil
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
 
@@ -74,6 +77,72 @@ class ReplaceResult(BaseModel):
     preview_lines: list[str] = Field(default_factory=list)
 
 
+def backup_files(files: list[Path]) -> Optional[Path]:
+    """创建文件备份.
+
+    Args:
+        files: 要备份的文件列表
+
+    Returns:
+        备份目录路径，如果备份失败则返回 None
+
+    """
+    if not files:
+        return None
+
+    # 创建带时间戳的备份目录
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    backup_base = Path.home() / ".simpletools-backup"
+    backup_dir = backup_base / f"replace_{timestamp}"
+
+    try:
+        backup_dir.mkdir(parents=True, exist_ok=True)
+
+        # 备份每个文件
+        backed_up_files = []
+        for file_path in files:
+            try:
+                # 确保路径是绝对路径
+                abs_file_path = file_path.resolve()
+
+                # 保持相对路径结构
+                try:
+                    # 尝试获取相对于当前工作目录的路径
+                    relative_path = abs_file_path.relative_to(Path.cwd().resolve())
+                except ValueError:
+                    # 如果无法获取相对路径，使用文件名
+                    relative_path = Path(file_path.name)
+
+                backup_path = backup_dir / relative_path
+                backup_path.parent.mkdir(parents=True, exist_ok=True)
+
+                # 复制文件
+                shutil.copy2(abs_file_path, backup_path)
+                backed_up_files.append(str(relative_path))
+
+            except Exception as e:
+                logfire.error(f"备份文件失败: {file_path} - {e}")
+
+        # 保存备份信息
+        backup_info = {
+            "timestamp": timestamp,
+            "operation": "text_replace",
+            "total_files": len(files),
+            "backed_up_files": backed_up_files,
+            "backup_time": datetime.now().isoformat(),
+        }
+
+        with open(backup_dir / "backup_info.json", "w", encoding="utf-8") as f:
+            json.dump(backup_info, f, indent=2, ensure_ascii=False)
+
+        logfire.info(f"成功备份 {len(backed_up_files)} 个文件到 {backup_dir}")
+        return backup_dir
+
+    except Exception as e:
+        logfire.error(f"创建备份目录失败: {e}")
+        return None
+
+
 class TextReplaceTool:
     """文本替换工具."""
 
@@ -145,12 +214,35 @@ class TextReplaceTool:
                 suggestions=["指定一个目录路径", "使用 --file 参数处理单个文件"],
             )
 
+        # 默认排除的目录
+        excluded_dirs = {
+            ".venv",
+            "venv",
+            "env",  # 虚拟环境
+            ".git",
+            ".svn",
+            ".hg",  # 版本控制
+            "__pycache__",
+            ".pytest_cache",
+            ".mypy_cache",  # 缓存
+            "node_modules",
+            "dist",
+            "build",  # 构建目录
+            ".idea",
+            ".vscode",  # IDE配置
+            "site-packages",  # Python包目录
+        }
+
         # 构建文件扩展名集合
         extensions = set(self.config.extensions) if self.config.extensions else None
 
         # 收集文件
         files = []
         for file_path in dir_path.rglob("*"):
+            # 检查是否在排除的目录中
+            if any(excluded in file_path.parts for excluded in excluded_dirs):
+                continue
+
             if file_path.is_file() and not file_path.name.startswith("."):
                 # 如果指定了扩展名，检查文件扩展名
                 if extensions:
@@ -618,6 +710,7 @@ def _handle_execute_mode(
     file: Optional[str],
     extension: tuple[str, ...],
     skip_confirm: bool,
+    backup: bool,
 ) -> None:
     """处理执行模式."""
     # 获取包含匹配内容的文件
@@ -645,6 +738,16 @@ def _handle_execute_mode(
             click.echo("操作已取消")
             return
 
+    # 如果启用了备份，在执行前创建备份
+    backup_dir = None
+    if backup:
+        click.echo("\n🔄 正在创建备份...")
+        backup_dir = backup_files(files_with_matches)
+        if backup_dir:
+            click.echo(f"✅ 已备份 {len(files_with_matches)} 个文件到：{backup_dir}")
+        else:
+            click.echo("⚠️  备份失败，但继续执行操作")
+
     # 执行替换并输出结果
     _execute_and_output_results(
         tool, files, format_type, pattern, path, file, extension
@@ -659,6 +762,8 @@ def _handle_execute_mode(
 @option("-d", "--dry-run", is_flag=True, default=None, help="预览模式")
 @option("--execute", is_flag=True, help="执行模式（跳过预览）")
 @option("-y", "--yes", is_flag=True, help="跳过确认提示")
+@option("--backup", is_flag=True, help="执行前自动备份文件")
+@option("--ai-check", is_flag=True, help="使用AI分析替换风险")
 @option(
     "--format",
     type=click.Choice(["plain", "json", "csv"], case_sensitive=False),
@@ -675,6 +780,8 @@ def replace_cmd(
     dry_run: Optional[bool],
     execute: bool,
     yes: bool,
+    backup: bool,
+    ai_check: bool,
     format: Optional[str],
 ) -> None:
     """批量替换文本内容.
@@ -720,6 +827,22 @@ def replace_cmd(
             if format_type == "plain":
                 _output_scan_result(files, old_text, new_text, path if not file else "")
 
+            # AI 风险分析（如果启用）
+            if ai_check and not replace_config.dry_run:
+                improved_pattern = _perform_ai_analysis(
+                    old_text,
+                    new_text,
+                    files,
+                    extension,
+                    replace_config.skip_confirm,
+                )
+
+                # 如果用户选择了改进的模式，更新配置
+                if improved_pattern:
+                    replace_config.pattern = improved_pattern
+                    tool = TextReplaceTool(replace_config)
+                    old_text, new_text = _format_pattern_display(improved_pattern)
+
             # 预览模式
             if replace_config.dry_run:
                 _handle_preview_mode(
@@ -740,6 +863,7 @@ def replace_cmd(
                 file,
                 extension,
                 replace_config.skip_confirm,
+                backup,
             )
 
     except ToolError as e:
@@ -810,3 +934,80 @@ def _output_formatted_result(
 
     output = format_output(data, format_type)
     click.echo(output)
+
+
+def _perform_ai_analysis(
+    old_text: str,
+    new_text: str,
+    files: list[Path],
+    extensions: tuple[str, ...],
+    skip_confirm: bool,
+) -> Optional[str]:
+    """执行AI风险分析.
+
+    Returns:
+        改进的模式（如果用户选择使用），否则返回None
+
+    """
+    try:
+        from ..ai.text_analyzer import TextAnalyzer, format_risk_display
+
+        # 初始化分析器
+        analyzer = TextAnalyzer()
+
+        # 准备文件扩展名信息
+        file_extensions = list(extensions) if extensions else None
+        if not file_extensions and files:
+            # 从文件列表中提取扩展名
+            file_extensions = list(set(f.suffix for f in files[:10] if f.suffix))
+
+        # 获取内容样本（从前几个文件中提取）
+        sample_content = None
+        for f in files[:3]:  # 最多检查3个文件
+            try:
+                with open(f, encoding="utf-8") as file:
+                    sample_content = file.read(1000)  # 读取前1000字符
+                    break
+            except Exception:
+                continue
+
+        # 显示分析中的提示
+        click.echo("\n🤖 正在进行 AI 风险分析...")
+
+        # 调用AI分析
+        analysis = analyzer.analyze_replace_pattern_sync(
+            old_text=old_text,
+            new_text=new_text,
+            sample_content=sample_content,
+            file_extensions=file_extensions,
+        )
+
+        # 显示分析结果
+        click.echo(format_risk_display(analysis))
+
+        # 如果有高风险且未跳过确认，要求强制确认
+        if analysis.risk_level == "high" and not skip_confirm:
+            click.echo("\n⚠️  检测到高风险替换操作！")
+            click.echo(
+                "为了确保您了解风险，请输入 'YES' 确认执行（输入其他内容取消）："
+            )
+            confirmation = click.prompt("", default="", show_default=False)
+            if confirmation.strip() != "YES":
+                raise click.ClickException("操作已取消")
+
+        # 如果有改进建议，询问是否使用
+        if analysis.improved_pattern:
+            click.echo(f"\n💡 AI推荐使用更安全的模式：{analysis.improved_pattern}")
+            if not skip_confirm and click.confirm("是否使用推荐的模式？", default=True):
+                # 返回改进的模式，让调用方使用
+                return analysis.improved_pattern
+
+    except ImportError:
+        click.echo("\n⚠️  AI功能未启用或配置不正确")
+        logfire.warning("AI模块未找到")
+    except Exception as e:
+        click.echo(f"\n⚠️  AI分析失败: {e}")
+        logfire.error(f"AI分析失败: {e}")
+        # AI分析失败不应该阻止正常操作
+
+    return None  # 默认返回None

@@ -201,21 +201,12 @@ class DuplicateFinder:
                 )
 
             # 默认排除的目录
-            excluded_dirs = {
-                ".venv",
-                "venv",
-                "env",  # 虚拟环境
-                ".git",
-                ".svn",
-                ".hg",  # 版本控制
-                "__pycache__",
-                ".pytest_cache",
-                ".mypy_cache",  # 缓存
-                "node_modules",
-                "dist",
-                "build",  # 构建目录
-                ".idea",
-                ".vscode",  # IDE配置
+            EXCLUDED_DIRS = {
+                ".venv", "venv", "env",  # 虚拟环境
+                ".git", ".svn", ".hg",  # 版本控制
+                "__pycache__", ".pytest_cache", ".mypy_cache",  # 缓存
+                "node_modules", "dist", "build",  # 构建目录
+                ".idea", ".vscode",  # IDE配置
                 "site-packages",  # Python包目录
             }
 
@@ -229,7 +220,7 @@ class DuplicateFinder:
                 # 扫描文件
                 for file_path in scan_path.glob(pattern):
                     # 检查是否在排除的目录中
-                    if any(excluded in file_path.parts for excluded in excluded_dirs):
+                    if any(excluded in file_path.parts for excluded in EXCLUDED_DIRS):
                         continue
 
                     # 只处理文件，跳过目录
@@ -435,84 +426,6 @@ def format_size(size_bytes: int) -> str:
     return f"{size:.1f} {units[unit_index]}"
 
 
-def _display_scan_info(scan_path: str, total_files: int, recursive: bool) -> None:
-    """显示扫描信息."""
-    click.echo(f"扫描目录: {scan_path}")
-    click.echo(f"扫描模式: {'递归扫描' if recursive else '仅顶层目录'}")
-    click.echo(f"文件总数: {total_files:,} 个")
-    click.echo("━" * 60)
-
-
-def _display_single_group(
-    index: int,
-    group: DuplicateGroup,
-    show_commands: bool,
-    ai_analyses: Optional[dict[str, Any]],
-) -> None:
-    """显示单个重复文件组."""
-    # 显示组标题
-    click.echo(
-        f"【第 {index} 组】{group.count} 个文件, "
-        f"每个 {format_size(group.size)}, "
-        f"可节省 {format_size(group.potential_save)}"
-    )
-
-    # 显示文件列表
-    for file_path in group.files:
-        click.echo(f"  • {file_path}")
-
-    # 显示AI分析结果（如果有）
-    if ai_analyses and group.hash in ai_analyses:
-        analysis = ai_analyses[group.hash]
-        click.echo("\n  🤖 AI分析结果：")
-        for line in analysis.split("\n"):
-            if line.strip():
-                click.echo(f"     {line}")
-
-    # 显示删除命令建议
-    if show_commands and len(group.files) > 1:
-        _display_delete_commands(group, ai_analyses)
-
-    click.echo()  # 空行分隔
-
-
-def _display_delete_commands(
-    group: DuplicateGroup, ai_analyses: Optional[dict[str, Any]]
-) -> None:
-    """显示删除命令建议."""
-    # 如果有AI分析结果，使用AI的建议
-    if ai_analyses and group.hash in ai_analyses:
-        analysis_dict = ai_analyses.get(f"{group.hash}_data", {})
-        keep_file = analysis_dict.get("recommended_keep")
-        if keep_file:
-            click.echo(f"\n  💡 AI建议保留: {keep_file}")
-            files_to_delete = [f for f in group.files if str(f) != str(keep_file)]
-        else:
-            click.echo(f"\n  💡 建议保留: {group.files[0]}")
-            files_to_delete = group.files[1:]
-    else:
-        click.echo(f"\n  💡 建议保留: {group.files[0]}")
-        files_to_delete = group.files[1:]
-
-    click.echo("  🗑️  可删除命令:")
-    for file_path in files_to_delete:
-        click.echo(f"     rm '{file_path}'")
-
-
-def _display_summary(
-    total_duplicates: int, total_save_space: int, show_commands: bool
-) -> None:
-    """显示总结统计."""
-    click.echo("━" * 60)
-    click.echo(
-        f"总计：{total_duplicates} 个重复文件，"
-        f"可节省 {format_size(total_save_space)} 空间"
-    )
-
-    if show_commands:
-        click.echo("\n⚠️  警告：删除文件前请确认重要性，建议先备份！")
-
-
 def display_duplicate_results(
     duplicate_groups: list[DuplicateGroup],
     scan_path: str,
@@ -520,8 +433,7 @@ def display_duplicate_results(
     recursive: bool,
     show_commands: bool = False,
     ai_analyses: Optional[dict[str, Any]] = None,
-) -> None:
-    """友好展示重复文件检测结果.
+) -> None:    """友好展示重复文件检测结果.
 
     参数：
         duplicate_groups - 重复文件组列表
@@ -531,8 +443,11 @@ def display_duplicate_results(
         show_commands - 是否显示删除建议命令
         ai_analyses - AI分析结果（可选）
     """
-    # 显示扫描信息
-    _display_scan_info(scan_path, total_files, recursive)
+    # 输出扫描信息
+    click.echo(f"扫描目录: {scan_path}")
+    click.echo(f"扫描模式: {'递归扫描' if recursive else '仅顶层目录'}")
+    click.echo(f"文件总数: {total_files:,} 个")
+    click.echo("━" * 60)
 
     # 如果没有重复文件
     if not duplicate_groups:
@@ -548,10 +463,57 @@ def display_duplicate_results(
     for index, group in enumerate(duplicate_groups, 1):
         total_duplicates += group.count
         total_save_space += group.potential_save
-        _display_single_group(index, group, show_commands, ai_analyses)
+
+        # 显示组标题
+        click.echo(
+            f"【第 {index} 组】{group.count} 个文件, "
+            f"每个 {format_size(group.size)}, "
+            f"可节省 {format_size(group.potential_save)}"
+        )
+
+        # 显示文件列表
+        for file_path in group.files:
+            click.echo(f"  • {file_path}")
+
+        # 显示AI分析结果（如果有）
+        if ai_analyses and group.hash in ai_analyses:
+            analysis = ai_analyses[group.hash]
+            click.echo("\n  🤖 AI分析结果：")
+            for line in analysis.split('\n'):
+                if line.strip():
+                    click.echo(f"     {line}")
+
+        # 如果需要显示删除命令建议
+        if show_commands and len(group.files) > 1:
+            # 如果有AI分析结果，使用AI的建议
+            if ai_analyses and group.hash in ai_analyses:
+                analysis_dict = ai_analyses.get(f"{group.hash}_data", {})
+                keep_file = analysis_dict.get("recommended_keep")
+                if keep_file:
+                    click.echo(f"\n  💡 AI建议保留: {keep_file}")
+                    files_to_delete = [f for f in group.files if str(f) != str(keep_file)]
+                else:
+                    click.echo(f"\n  💡 建议保留: {group.files[0]}")
+                    files_to_delete = group.files[1:]
+            else:
+                click.echo(f"\n  💡 建议保留: {group.files[0]}")
+                files_to_delete = group.files[1:]
+
+            click.echo("  🗑️  可删除命令:")
+            for file_path in files_to_delete:
+                click.echo(f"     rm '{file_path}'")
+
+        click.echo()  # 空行分隔
 
     # 显示总结统计
-    _display_summary(total_duplicates, total_save_space, show_commands)
+    click.echo("━" * 60)
+    click.echo(
+        f"总计：{total_duplicates} 个重复文件，"
+        f"可节省 {format_size(total_save_space)} 空间"
+    )
+
+    if show_commands:
+        click.echo("\n⚠️  警告：删除文件前请确认重要性，建议先备份！")
 
 
 def _prepare_duplicate_config(
@@ -647,6 +609,7 @@ def _handle_formatted_output(
     click.echo(output)
 
 
+
 # 新增：执行AI分析的异步函数
 async def _perform_ai_analysis(
     duplicate_groups: list[DuplicateGroup],
@@ -660,20 +623,16 @@ async def _perform_ai_analysis(
 
     Returns:
         AI分析结果字典
-
     """
     analyzer = VersionAnalyzer(ai_config)
-    analyses: dict[str, Any] = {}
+    analyses = {}
 
     for group in duplicate_groups:
         try:
-            with logfire.span(
-                "ai_version_analysis",
-                attributes={
-                    "file_count": group.count,
-                    "file_size": group.size,
-                },
-            ):
+            with logfire.span("ai_version_analysis", attributes={
+                "file_count": group.count,
+                "file_size": group.size,
+            }):
                 # 执行AI分析
                 analysis = await analyzer.analyze_with_ai(group.files)
 
@@ -683,10 +642,8 @@ async def _perform_ai_analysis(
 
                 # 保存原始数据用于命令建议
                 analyses[f"{group.hash}_data"] = {
-                    "recommended_keep": (
-                        analysis.recommended_keep if analysis.recommended_keep else None
-                    ),
-                    "confidence": float(analysis.confidence),
+                    "recommended_keep": analysis.recommended_keep,
+                    "confidence": analysis.confidence,
                 }
 
                 logfire.info(f"AI分析完成：{group.count}个文件")
@@ -695,99 +652,6 @@ async def _perform_ai_analysis(
             # 继续处理其他组
 
     return analyses
-
-
-def _handle_ai_analysis(
-    duplicate_groups: list[DuplicateGroup], ai_analyze: bool
-) -> Optional[dict[str, Any]]:
-    """处理AI分析."""
-    if not ai_analyze or not duplicate_groups:
-        return None
-
-    # 获取AI配置
-    ai_config = AIConfig()
-    if not ai_config.enabled:
-        click.echo("\n⚠️  AI功能未启用，请设置 DEEPSEEK_API_KEY 环境变量")
-        return None
-
-    click.echo("\n🤖 正在进行AI版本分析...")
-    # 运行异步AI分析
-    ai_analyses = asyncio.run(_perform_ai_analysis(duplicate_groups, ai_config))
-    click.echo("✅ AI分析完成\n")
-    return ai_analyses
-
-
-def _handle_json_csv_output(
-    duplicate_groups: list[DuplicateGroup],
-    format_type: str,
-    ai_analyses: Optional[dict[str, Any]],
-) -> None:
-    """处理JSON/CSV格式输出."""
-    if ai_analyses:
-        # 增强格式化数据
-        groups_data = []
-        for group in duplicate_groups:
-            group_data = {
-                "hash": group.hash,
-                "size": group.size,
-                "count": group.count,
-                "files": [str(f) for f in group.files],
-            }
-            # 添加AI分析结果
-            if group.hash in ai_analyses:
-                data_key = f"{group.hash}_data"
-                if data_key in ai_analyses:
-                    recommended_keep = ai_analyses[data_key].get("recommended_keep")
-                    group_data["ai_recommendation"] = recommended_keep or ""
-                    group_data["ai_confidence"] = ai_analyses[data_key].get(
-                        "confidence", 0.0
-                    )
-            groups_data.append(group_data)
-
-        # 创建增强的数据模型
-        total_save_space = sum(group.potential_save for group in duplicate_groups)
-        data = DuplicateData(
-            total_groups=len(duplicate_groups),
-            total_size_saved=total_save_space,
-            groups=groups_data,
-        )
-        output = format_output(data, format_type)
-        click.echo(output)
-    else:
-        _handle_formatted_output(duplicate_groups, format_type)
-
-
-def _record_duplicates_history(
-    path: str,
-    duplicate_config: DuplicateConfig,
-    format_type: str,
-    ai_analyze: bool,
-    all_files: list[FileInfo],
-    duplicate_groups: list[DuplicateGroup],
-) -> None:
-    """记录操作历史."""
-    from ..utils.smart_interactive import operation_history
-
-    # 计算总的节省空间
-    total_save_space = sum(group.potential_save for group in duplicate_groups)
-
-    operation_history.add(
-        "duplicates",
-        {
-            "path": path,
-            "recursive": duplicate_config.recursive,
-            "min_size": duplicate_config.min_size,
-            "extensions": duplicate_config.extensions,
-            "format": format_type,
-            "ai_analyze": ai_analyze,  # 记录是否使用AI
-        },
-        {
-            "scanned_files": len(all_files),
-            "duplicate_groups": len(duplicate_groups),
-            "space_saved": total_save_space,
-        },
-    )
-
 
 @command()
 @argument("path", type=click.Path(exists=True), default=".")
@@ -846,31 +710,93 @@ def duplicates_cmd(
             ctx, path, recursive, no_recursive, min_size, extension
         )
 
-        # 创建检测器和执行检测
+        # 创建检测器
         finder = DuplicateFinder(duplicate_config)
+
+        # 显示开始信息（仅在plain格式时显示）
         if format == "plain":
             click.echo("🔍 开始扫描重复文件...")
+
+        # 执行检测
         duplicate_groups, all_files = _execute_duplicate_finder(finder)
 
-        # 处理AI分析
-        ai_analyses = _handle_ai_analysis(duplicate_groups, ai_analyze)
+        # 执行AI分析（如果启用）
+        ai_analyses = None
+        if ai_analyze and duplicate_groups:
+            # 获取AI配置
+            ai_config = AIConfig()
+            if not ai_config.enabled:
+                click.echo("\n⚠️  AI功能未启用，请设置 DEEPSEEK_API_KEY 环境变量")
+            else:
+                click.echo("\n🤖 正在进行AI版本分析...")
+                # 运行异步AI分析
+                ai_analyses = asyncio.run(_perform_ai_analysis(duplicate_groups, ai_config))
+                click.echo("✅ AI分析完成\n")
+
 
         # 根据格式选择输出方式
         if format != "plain":
-            _handle_json_csv_output(duplicate_groups, format, ai_analyses)
+            # 如果有AI分析，添加到JSON/CSV输出
+            if ai_analyses:
+                # 增强格式化数据
+                groups_data = []
+                for group in duplicate_groups:
+                    group_data = {
+                        "hash": group.hash,
+                        "size": group.size,
+                        "count": group.count,
+                        "files": [str(f) for f in group.files],
+                    }
+                    # 添加AI分析结果
+                    if group.hash in ai_analyses:
+                        data_key = f"{group.hash}_data"
+                        if data_key in ai_analyses:
+                            group_data["ai_recommendation"] = str(ai_analyses[data_key].get("recommended_keep", ""))
+                            group_data["ai_confidence"] = ai_analyses[data_key].get("confidence", 0.0)
+                    groups_data.append(group_data)
+
+                # 创建增强的数据模型
+                total_save_space = sum(group.potential_save for group in duplicate_groups)
+                data = DuplicateData(
+                    total_groups=len(duplicate_groups),
+                    total_size_saved=total_save_space,
+                    groups=groups_data,
+                )
+                output = format_output(data, format)
+                click.echo(output)
+            else:
+                _handle_formatted_output(duplicate_groups, format)
         else:
+            # 保持原有的纯文本输出方式
             display_duplicate_results(
                 duplicate_groups=duplicate_groups,
                 scan_path=os.path.abspath(path),
                 total_files=len(all_files),
                 recursive=duplicate_config.recursive,
                 show_commands=show_commands,
-                ai_analyses=ai_analyses,
             )
 
-        # 记录历史
-        _record_duplicates_history(
-            path, duplicate_config, format, ai_analyze, all_files, duplicate_groups
+        # 记录到操作历史
+        from ..utils.smart_interactive import operation_history
+
+        # 计算总的节省空间
+        total_save_space = sum(group.potential_save for group in duplicate_groups)
+
+        operation_history.add(
+            "duplicates",
+            {
+                "path": path,
+                "recursive": duplicate_config.recursive,
+                "min_size": duplicate_config.min_size,
+                "extensions": duplicate_config.extensions,
+                "format": format,
+                "ai_analyze": ai_analyze,  # 记录是否使用AI
+            },
+            {
+                "scanned_files": len(all_files),
+                "duplicate_groups": len(duplicate_groups),
+                "space_saved": total_save_space,
+            },
         )
 
     except ToolError:

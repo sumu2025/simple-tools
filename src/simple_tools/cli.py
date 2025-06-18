@@ -13,6 +13,7 @@ from .core.batch_rename import rename_cmd
 from .core.duplicate_finder import duplicates_cmd
 from .core.file_organizer import organize_cmd
 from .core.file_tool import list_cmd
+from .core.summarize_cmd import summarize
 from .core.text_replace import replace_cmd
 from .utils.config_loader import ConfigLoader
 from .utils.smart_interactive import (
@@ -100,6 +101,7 @@ cli.add_command(duplicates_cmd, name="duplicates")
 cli.add_command(rename_cmd, name="rename")
 cli.add_command(replace_cmd, name="replace")
 cli.add_command(organize_cmd, name="organize")
+cli.add_command(summarize, name="summarize")
 cli.add_command(history_cmd, name="history")
 
 

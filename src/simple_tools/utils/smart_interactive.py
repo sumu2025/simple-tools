@@ -137,6 +137,7 @@ class CommandSuggestionEngine:
             "rename",
             "replace",
             "organize",
+            "summarize",
             "history",
         ]
         self.command_descriptions = {
@@ -145,6 +146,7 @@ class CommandSuggestionEngine:
             "rename": "批量重命名文件",
             "replace": "批量替换文本",
             "organize": "自动整理文件",
+            "summarize": "生成文档摘要",
             "history": "查看操作历史",
         }
 

@@ -1,5 +1,6 @@
 """文件整理工具模块."""
 
+import asyncio
 import os
 import shutil
 from datetime import datetime
@@ -12,6 +13,8 @@ from pydantic import BaseModel, Field
 
 from simple_tools._typing import argument, command, option, pass_context
 
+from ..ai.classifier import FileClassifier
+from ..ai.config import get_ai_config
 from ..utils.errors import (
     BatchErrorCollector,
     ErrorContext,
@@ -122,16 +125,30 @@ class FileOrganizerTool:
         ),
     ]
 
-    def __init__(self, config: OrganizeConfig):
+    def __init__(self, config: OrganizeConfig, ai_classify: bool = False):
         """初始化文件整理工具."""
         self.config = config
         self.base_path = Path(config.path)
+        self.ai_classify = ai_classify
+        self.ai_classifier = None
+
+        # 如果启用AI分类，初始化分类器
+        if ai_classify:
+            ai_config = get_ai_config()
+            if ai_config.enabled and ai_config.is_configured:
+                self.ai_classifier = FileClassifier()
+                logfire.info("AI智能分类器已启用")
+            else:
+                click.echo("⚠️  AI功能未启用或未配置，将使用传统分类方式")
+                self.ai_classify = False
+
         logfire.info(
             "初始化文件整理工具",
             attributes={
                 "path": config.path,
                 "mode": config.mode,
                 "recursive": config.recursive,
+                "ai_classify": self.ai_classify,
             },
         )
 
@@ -160,13 +177,41 @@ class FileOrganizerTool:
                 ),
                 suggestions=["指定一个目录路径", "使用 --file 参数处理单个文件"],
             )
+
+        # 默认排除的目录
+        excluded_dirs = {
+            ".venv",
+            "venv",
+            "env",  # 虚拟环境
+            ".git",
+            ".svn",
+            ".hg",  # 版本控制
+            "__pycache__",
+            ".pytest_cache",
+            ".mypy_cache",  # 缓存
+            "node_modules",
+            "dist",
+            "build",  # 构建目录
+            ".idea",
+            ".vscode",  # IDE配置
+            "site-packages",  # Python包目录
+        }
+
         try:
-            files = []
+            files: list[Path] = []
             if self.config.recursive:
                 files = list(self.base_path.rglob("*"))
             else:
                 files = list(self.base_path.iterdir())
-            return [f for f in files if f.is_file() and not f.name.startswith(".")]
+
+            # 过滤文件：排除隐藏文件和特定目录中的文件
+            result: list[Path] = []
+            for f in files:
+                if f.is_file() and not f.name.startswith("."):
+                    # 检查是否在排除的目录中
+                    if not any(excluded in f.parts for excluded in excluded_dirs):
+                        result.append(f)
+            return result
         except PermissionError:
             raise ToolError(
                 f"无权限访问目录: {self.config.path}",
@@ -188,6 +233,49 @@ class FileOrganizerTool:
             if ext in category.extensions:
                 return category
         return self.CATEGORIES[-1]
+
+    async def classify_file_with_ai(self, file_path: Path) -> FileCategory:
+        """使用AI对文件进行智能分类."""
+        if not self.ai_classifier:
+            # 如果AI分类器不可用，回退到传统分类
+            return self.classify_file(file_path)
+
+        try:
+            # 调用AI分类器
+            result = await self.ai_classifier.classify_file(file_path)
+
+            # 映射AI分类结果到预定义类别
+            ai_category = result.category.lower()
+
+            # 尝试匹配AI分类到预定义类别
+            for category in self.CATEGORIES[:-1]:
+                if (
+                    ai_category in category.name.lower()
+                    or category.name.lower() in ai_category
+                ):
+                    logfire.info(
+                        f"AI分类成功: {file_path.name} -> {category.name} "
+                        f"(置信度: {result.confidence}%)"
+                    )
+                    return category
+
+            # 如果没有匹配的类别，根据置信度决定
+            if result.confidence >= 70:
+                # 高置信度时，创建新的动态类别
+                return FileCategory(
+                    name=result.category,
+                    icon="🤖",
+                    folder_name=result.category,
+                    extensions=[],  # AI分类不依赖扩展名
+                )
+            else:
+                # 低置信度时，回退到传统分类
+                logfire.info(f"AI分类置信度较低({result.confidence}%)，使用传统分类")
+                return self.classify_file(file_path)
+
+        except Exception as e:
+            logfire.error(f"AI分类失败: {e}，回退到传统分类")
+            return self.classify_file(file_path)
 
     def generate_target_path(self, file_path: Path, category: FileCategory) -> Path:
         """生成目标路径."""
@@ -211,24 +299,80 @@ class FileOrganizerTool:
     def create_organize_plan(self) -> list[OrganizeItem]:
         """创建整理计划."""
         files = self.scan_files()
-        items = []
-        for file_path in files:
-            category = self.classify_file(file_path)
-            target_path = self.generate_target_path(file_path, category)
-            status = "pending"
-            error = None
-            if target_path.exists():
-                status = "skipped"
-                error = "目标文件已存在"
-            items.append(
-                OrganizeItem(
-                    source_path=file_path,
-                    target_path=target_path,
-                    category=category.name,
-                    status=status,
-                    error=error,
+        items: list[OrganizeItem] = []
+
+        if self.ai_classify and self.ai_classifier:
+            # 使用AI分类
+            items = asyncio.run(self._create_ai_organize_plan(files))
+        else:
+            # 使用传统分类
+            for file_path in files:
+                category = self.classify_file(file_path)
+                target_path = self.generate_target_path(file_path, category)
+                status = "pending"
+                error = None
+                if target_path.exists():
+                    status = "skipped"
+                    error = "目标文件已存在"
+                items.append(
+                    OrganizeItem(
+                        source_path=file_path,
+                        target_path=target_path,
+                        category=category.name,
+                        status=status,
+                        error=error,
+                    )
                 )
-            )
+        return items
+
+    async def _create_ai_organize_plan(self, files: list[Path]) -> list[OrganizeItem]:
+        """使用AI创建整理计划."""
+        items: list[OrganizeItem] = []
+
+        if not files:
+            return items
+
+        # 显示AI分析进度
+        click.echo(f"\n🤖 正在使用AI分析 {len(files)} 个文件...")
+
+        # 批量AI分类（带进度显示）
+        with ProgressTracker(total=len(files), description="AI智能分类") as progress:
+            for file_path in files:
+                try:
+                    category = await self.classify_file_with_ai(file_path)
+                    target_path = self.generate_target_path(file_path, category)
+                    status = "pending"
+                    error = None
+                    if target_path.exists():
+                        status = "skipped"
+                        error = "目标文件已存在"
+                    items.append(
+                        OrganizeItem(
+                            source_path=file_path,
+                            target_path=target_path,
+                            category=category.name,
+                            status=status,
+                            error=error,
+                        )
+                    )
+                except Exception as e:
+                    logfire.error(f"AI分类文件失败: {file_path} - {e}")
+                    # 失败时使用传统分类
+                    category = self.classify_file(file_path)
+                    target_path = self.generate_target_path(file_path, category)
+                    items.append(
+                        OrganizeItem(
+                            source_path=file_path,
+                            target_path=target_path,
+                            category=category.name,
+                            status="pending",
+                            error=None,
+                        )
+                    )
+
+                progress.update(1)
+
+        click.echo("✅ AI分析完成\n")
         return items
 
     def _move_file(
@@ -425,7 +569,7 @@ def _process_organize_plan(
             files_to_move = [
                 str(item.source_path) for item in items if item.status == "pending"
             ]
-            preview_changes = {}
+            preview_changes: dict[str, str] = {}
             shown = 0
             for item in items:
                 if item.status == "pending":
@@ -462,7 +606,7 @@ def _handle_format_output(
     """处理格式化输出."""
     from ..utils.formatter import OrganizeData, format_output
 
-    organize_results = []
+    organize_results: list[dict[str, Any]] = []
     for item in items:
         organize_results.append(
             {
@@ -496,14 +640,17 @@ def _record_organize_history(
     organize_config: OrganizeConfig,
     category_stats: dict[str, list[Any]],
     path: str,
+    ai_classify: bool = False,
 ) -> None:
     """记录操作历史."""
     from ..utils.smart_interactive import operation_history
 
+    # 提前声明变量，避免重复定义
+    category_counts: dict[str, int] = {}
+
     if organize_config.dry_run:
         pending_count = len([i for i in items if i.status == "pending"])
         skipped_count = len([i for i in items if i.status == "skipped"])
-        category_counts = {}
         for cat_name, cat_items in category_stats.items():
             category_counts[cat_name] = len(
                 [i for i in cat_items if i.status == "pending"]
@@ -515,6 +662,7 @@ def _record_organize_history(
                 "mode": organize_config.mode,
                 "recursive": organize_config.recursive,
                 "dry_run": True,
+                "ai_classify": ai_classify,
             },
             {
                 "total_files": len(items),
@@ -525,7 +673,6 @@ def _record_organize_history(
             },
         )
     elif result:
-        category_counts = {}
         for cat_name, cat_items in category_stats.items():
             category_counts[cat_name] = len(
                 [i for i in cat_items if i.status == "success"]
@@ -537,6 +684,7 @@ def _record_organize_history(
                 "mode": organize_config.mode,
                 "recursive": organize_config.recursive,
                 "dry_run": False,
+                "ai_classify": ai_classify,
             },
             {
                 "total_files": result.total,
@@ -561,6 +709,7 @@ def _record_organize_history(
 @option("-d", "--dry-run", is_flag=True, default=None, help="预览模式")
 @option("--execute", is_flag=True, help="执行模式（跳过预览）")
 @option("-y", "--yes", is_flag=True, help="跳过确认提示")
+@option("--ai-classify", is_flag=True, help="使用AI智能分类（需要配置AI功能）")
 @option(
     "--format",
     type=click.Choice(["plain", "json", "csv"], case_sensitive=False),
@@ -576,9 +725,17 @@ def organize_cmd(
     dry_run: Optional[bool],
     execute: bool,
     yes: bool,
+    ai_classify: bool,
     format: Optional[str],
 ) -> None:
-    """自动整理文件到相应目录."""
+    """自动整理文件到相应目录.
+
+    示例：
+      tools organize ~/Downloads                    # 按扩展名分类整理
+      tools organize . --mode date                 # 按日期整理
+      tools organize . --ai-classify               # 使用AI智能分类
+      tools organize . --ai-classify --execute     # AI分类并直接执行
+    """
     try:
         organize_config = _prepare_organize_config(
             ctx, path, mode, recursive, dry_run, execute, yes
@@ -590,9 +747,10 @@ def organize_cmd(
                 "path": path,
                 "mode": organize_config.mode,
                 "recursive": organize_config.recursive,
+                "ai_classify": ai_classify,
             },
         ):
-            organizer = FileOrganizerTool(organize_config)
+            organizer = FileOrganizerTool(organize_config, ai_classify=ai_classify)
             items = organizer.create_organize_plan()
 
             if not items:
@@ -627,7 +785,7 @@ def organize_cmd(
                     organizer.print_organize_result(result)
 
             _record_organize_history(
-                items, result, organize_config, category_stats, path
+                items, result, organize_config, category_stats, path, ai_classify
             )
 
     except ToolError as e:
