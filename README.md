@@ -1,24 +1,29 @@
 # simple-tools
 
 [![CI](https://github.com/sumu2025/simple-tools/actions/workflows/ci.yml/badge.svg)](https://github.com/sumu2025/simple-tools/actions/workflows/ci.yml)
-[![Coverage](https://img.shields.io/badge/coverage-85%25-brightgreen)](https://github.com/sumu2025/simple-tools)
+[![Coverage](https://img.shields.io/badge/coverage-87.8%25-brightgreen)](https://github.com/sumu2025/simple-tools)
 [![Python](https://img.shields.io/badge/python-3.13+-blue)](https://www.python.org/downloads/)
 [![Poetry](https://img.shields.io/badge/poetry-managed-blueviolet)](https://python-poetry.org/)
 [![PyPI](https://img.shields.io/pypi/v/sumu-simple-tools)](https://pypi.org/project/sumu-simple-tools/)
+[![AI](https://img.shields.io/badge/AI-DeepSeek-orange)](https://www.deepseek.com/)
 
 一个简单实用的 Python 工具集，专注解决日常工作中的实际问题。
 
 ## 🚀 特性
 
-- **极简主义**：每个工具控制在 100 行代码内
-- **实用至上**：解决实际问题，避免花哨功能
-- **现代化技术栈**：充分利用 Python 3.13+ 和 Pydantic v2.11.5+ 的最新特性
-- **智能交互**：增强的确认对话和风险评估系统
-- **错误处理**：友好的错误提示和智能建议生成
-- **性能优化**：分块处理、异步操作和高效目录扫描
-- **多格式输出**：支持 plain、JSON、CSV 等多种输出格式
-- **监控集成**：使用 Logfire 进行深度性能监控
-- **高测试覆盖**：核心功能测试覆盖率 85%+
+- **🤖 AI 智能增强**：集成 DeepSeek API，提供智能分析和建议
+- **📄 文档摘要生成**：自动生成文档摘要，支持多种格式
+- **🧠 智能文件分类**：基于内容自动分类文件
+- **🔍 智能文本分析**：风险检测和版本识别
+- **⚡ 极简主义**：每个工具控制在 100 行代码内
+- **🎯 实用至上**：解决实际问题，避免花哨功能
+- **🔧 现代化技术栈**：充分利用 Python 3.13+ 和 Pydantic v2.11.5+ 的最新特性
+- **💬 智能交互**：增强的确认对话和风险评估系统
+- **🛡️ 错误处理**：友好的错误提示和智能建议生成
+- **⚡ 性能优化**：分块处理、异步操作和高效目录扫描
+- **📊 多格式输出**：支持 plain、JSON、CSV 等多种输出格式
+- **📈 监控集成**：使用 Logfire 进行深度性能监控
+- **🧪 高测试覆盖**：核心功能测试覆盖率 87.8%+
 
 ## 📦 安装
 
@@ -80,6 +85,9 @@ tools duplicates -e .jpg -e .png
 # 显示删除建议
 tools duplicates --show-commands
 
+# 🆕 AI 增强版本分析
+tools duplicates --ai-analyze
+
 # JSON格式输出
 tools duplicates --format json > duplicates.json
 ```
@@ -123,7 +131,7 @@ tools replace \"old:new\" -y
 # 🆕 执行前自动备份文件（推荐）
 tools replace \"old:new\" --backup --execute
 
-# 使用 AI 风险分析
+# 🆕 使用 AI 风险分析
 tools replace \"bug:issue\" --ai-check --execute
 
 # JSON格式输出结果
@@ -163,11 +171,42 @@ tools organize ~/Desktop --mode mixed
 # 递归处理子目录
 tools organize . --recursive
 
+# 🆕 AI 智能分类（基于文件内容）
+tools organize ~/Downloads --ai-classify
+
 # JSON格式输出结果
 tools organize . --format json > organize_results.json
 ```
 
-### 6. history - 操作历史查看
+### 6. 🆕 summarize - AI文档摘要生成
+利用AI技术自动生成文档摘要，支持多种文件格式。
+
+```bash
+# 生成单文件摘要
+tools summarize report.pdf
+
+# 批量生成目录下所有文档摘要
+tools summarize ~/Documents --batch
+
+# 指定摘要长度
+tools summarize file.txt --length 150
+
+# 指定输出语言
+tools summarize document.docx --language en
+
+# 保存摘要到文件
+tools summarize . --batch --output summaries.json
+
+# 指定文件类型
+tools summarize ~/Reports -e .pdf -e .docx --batch
+```
+
+#### 支持的文件格式
+- **文本文件**：.txt, .md, .rst, .py, .js, .html 等
+- **文档文件**：.pdf, .docx, .doc
+- **配置文件**：.json, .yaml, .toml, .ini 等
+
+### 7. history - 操作历史查看
 查看最近的操作历史记录。
 
 ```bash
@@ -176,6 +215,45 @@ tools history
 
 # 查看最近20条记录
 tools history -n 20
+```
+
+## 🤖 第三阶段 AI 智能增强
+
+### 🆕 DeepSeek AI 集成
+- **智能文件分类器**：基于文件内容自动判断文件类别
+- **文档摘要生成**：使用AI技术生成精准摘要，支持txt/md/pdf/docx等格式
+- **智能文本分析**：为文本替换提供风险检测和智能建议
+- **版本识别分析**：智能识别同一文件的不同版本，推荐保留版本
+
+### 💡 AI 功能特点
+- **可选增强**：AI功能默认关闭，不影响基础使用
+- **成本可控**：支持请求限制和成本监控
+- **智能缓存**：避免重复调用，提升响应速度
+- **隐私保护**：敏感文件不发送到AI，支持本地处理
+
+### 🔧 AI 配置要求
+使用AI功能需要设置环境变量：
+
+```bash
+# 设置 DeepSeek API 密钥
+export DEEPSEEK_API_KEY="your-api-key"
+
+# 可选：设置 API 端点
+export DEEPSEEK_API_BASE="https://api.deepseek.com/v1"
+```
+
+或在配置文件中启用：
+
+```yaml
+# .simple-tools.yml
+ai:
+  enabled: true
+  provider: deepseek
+  api_key: ${DEEPSEEK_API_KEY}  # 从环境变量读取
+  features:
+    smart_classify: true
+    auto_summarize: true
+    content_analysis: true
 ```
 
 ## 🔧 第二阶段增强功能
@@ -215,6 +293,7 @@ tools history -n 20
 - Python 3.13+（充分利用最新特性）
 - Poetry（依赖管理）
 - Logfire（监控，首次运行时配置）
+- DeepSeek API Key（可选，使用AI功能时需要）
 
 ### 本地开发
 ```bash
@@ -243,12 +322,22 @@ simple-tools/
 │       ├── cli.py               # CLI 入口
 │       ├── config.py            # 配置管理
 │       ├── _typing.py           # 类型定义
+│       ├── ai/                  # AI 智能功能模块
+│       │   ├── __init__.py
+│       │   ├── deepseek_client.py   # DeepSeek API 客户端
+│       │   ├── classifier.py        # 智能文件分类器
+│       │   ├── summarizer.py        # 文档摘要生成器
+│       │   ├── text_analyzer.py     # 文本分析器
+│       │   ├── version_analyzer.py  # 版本分析器
+│       │   ├── prompts.py           # Prompt 模板管理
+│       │   └── config.py            # AI 配置管理
 │       ├── core/                # 核心工具模块
 │       │   ├── file_tool.py
 │       │   ├── duplicate_finder.py
 │       │   ├── batch_rename.py
 │       │   ├── text_replace.py
-│       │   └── file_organizer.py
+│       │   ├── file_organizer.py
+│       │   └── summarize_cmd.py     # AI 摘要命令
 │       └── utils/               # 第二阶段增强功能
 │           ├── errors.py        # 现代化错误处理
 │           ├── smart_interactive.py # 智能交互系统
@@ -263,7 +352,7 @@ simple-tools/
 
 ## 🧪 测试
 
-项目使用 pytest 进行测试，核心功能测试覆盖率达到 85% 以上。
+项目使用 pytest 进行测试，核心功能测试覆盖率达到 87.8% 以上。
 
 ```bash
 # 运行所有测试
@@ -302,6 +391,27 @@ tools:
   format: json
   verbose: true
 
+  # AI 功能配置
+  ai:
+    enabled: true
+    provider: deepseek
+    model: deepseek-chat
+    max_tokens: 1000
+    temperature: 0.7
+    cache_ttl: 3600
+
+    # 功能开关
+    features:
+      smart_classify: true
+      auto_summarize: true
+      content_analysis: true
+      version_analysis: true
+
+    # 成本控制
+    limits:
+      daily_requests: 1000
+      monthly_budget: 50  # 人民币
+
   # 各工具配置
   list:
     show_all: true
@@ -320,6 +430,11 @@ tools:
   organize:
     mode: type
     recursive: false
+
+  summarize:
+    default_length: 200
+    default_language: zh
+    batch_mode: false
 ```
 
 ## 🤝 贡献
@@ -351,6 +466,39 @@ tools:
 - 🛡️ [错误处理文档](docs/第二阶段4-6板块儿开发方案材料/现代化错误处理系统)
 
 ## 📝 版本历史
+
+### v0.3.0 (2025-06-18) - 第三阶段完成 🤖
+**AI 智能化增强版**
+
+#### 🆕 AI 智能功能集成
+- 🤖 **DeepSeek API 集成**：提供全面的AI智能分析能力
+- 🧠 **智能文件分类器**：基于文件内容自动分类，识别率>90%
+- 📄 **文档摘要生成**：支持 txt、md、pdf、docx 等多种格式
+- 🔍 **智能文本分析**：为文本替换提供风险检测和智能建议
+- 📅 **版本识别分析**：智能识别同一文件的不同版本
+- 📝 **新增 summarize 命令**：`tools summarize` 用于文档摘要生成
+
+#### 🔧 AI 增强的现有工具
+- `tools organize --ai-classify` - 智能文件分类
+- `tools replace --ai-check` - 智能替换风险检测
+- `tools duplicates --ai-analyze` - 智能版本分析
+
+#### 📊 技术改进
+- 🔄 **异步支持**：新增 httpx 用于AI API调用
+- 📁 **文档处理**：新增 python-docx、pypdf 依赖
+- 🎯 **测试覆盖率**：从 85% 提升至 87.8%
+- 🔧 **现代化特性**：充分利用 Python 3.13.3 和 Pydantic v2
+
+#### 🛡️ 隐私和安全
+- 🔒 **隐私保护**：敏感文件不发送到AI
+- 💰 **成本控制**：支持请求限制和成本监控
+- 💾 **智能缓存**：避免重复调用，节省成本
+- ⚙️ **可选增强**：AI功能默认关闭，不影响基础使用
+
+#### 📝 配置要求
+- 需要设置 `DEEPSEEK_API_KEY` 环境变量使用AI功能
+- AI功能默认关闭，需在配置中启用
+- 新增完整的AI配置选项和成本控制
 
 ### v0.2.1 (2025-06-14) - 备份功能增强
 **数据安全增强版**
@@ -409,4 +557,4 @@ MIT License - 详见 [LICENSE](LICENSE) 文件
 
 **项目理念**：工具是拿来用的，不是拿来秀的！
 
-**第二阶段成就**：现代化技术栈 + 智能化交互 + 深度性能优化 = 极致用户体验 🚀
+**第三阶段成就**：现代化技术栈 + 智能化交互 + 深度性能优化 + AI智能增强 = 极致用户体验 🚀🤖
